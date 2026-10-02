@@ -44,9 +44,9 @@ PWA (React + TypeScript + Vite)
   └─ Service worker : app utilisable hors ligne (hors analyse)
           │  POST des pages (ordonnées)
           ▼
-Serveur Python FastAPI (Docker, sans état, sans BDD)
+Serveur Node.js (Docker, sans état, sans BDD)
   ├─ Audiveris (OMR) → MusicXML (un seul livre multi-pages)
-  ├─ Conversion MusicXML → modèle JSON (music21)
+  ├─ Conversion MusicXML → modèle JSON
   └─ Suppression des fichiers temporaires après traitement
 ```
 
@@ -127,7 +127,7 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
   - les images du web sont souvent sous l'interligne minimal d'Audiveris → **agrandissement automatique indispensable** (intégré à la v0) ;
   - l'OCR (titres, tempo en toutes lettres) exige les modèles Tesseract « standard », pas « fast » ;
   - des erreurs réelles apparaissent (ex. clé de fa lue en clé de sol) : la correction manuelle (V2) prendra de la valeur.
-- Le serveur de la v0 est en Node : à confirmer pour la V1 à la place de FastAPI (une seule stack JS, pas de music21 nécessaire jusqu'ici).
+- **Décision** : le serveur sera en **Node.js** (et non FastAPI) — une seule stack JS, la lecture du MusicXML est déjà faite côté JS dans la v0.
 
 ## 7. Hors V1 (pistes V2)
 
