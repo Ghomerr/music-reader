@@ -119,6 +119,16 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 | 4 | Sauvegarde | Export/import JSON, export WAV, partage mobile. | 1–2 j |
 | 5 | Finitions | PWA hors ligne, déploiement, gestion des erreurs, tempo en toutes lettres. | 1–2 j |
 
+### État d'avancement
+
+- **Étape 0** : maquette v2 dans [maquette/](maquette/index.html).
+- **Étape 1** : banc de test OMR disponible dans [v0/](v0/README.md) (serveur Node sans dépendance + Audiveris 5.11 extrait localement). Premiers enseignements :
+  - ~6–10 s par page sur un poste de développement ;
+  - les images du web sont souvent sous l'interligne minimal d'Audiveris → **agrandissement automatique indispensable** (intégré à la v0) ;
+  - l'OCR (titres, tempo en toutes lettres) exige les modèles Tesseract « standard », pas « fast » ;
+  - des erreurs réelles apparaissent (ex. clé de fa lue en clé de sol) : la correction manuelle (V2) prendra de la valeur.
+- Le serveur de la v0 est en Node : à confirmer pour la V1 à la place de FastAPI (une seule stack JS, pas de music21 nécessaire jusqu'ici).
+
 ## 7. Hors V1 (pistes V2)
 
 - Import PDF.

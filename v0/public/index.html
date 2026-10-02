@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Reader v0</title>
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.9.9/build/opensheetmusicdisplay.min.js"></script>
+<style>
+:root{
+  --bg:#f6f5f2; --surface:#fff; --surface-2:#f0eee9; --ink:#1d1d1f; --muted:#6b6b72; --line:#e2dfd8;
+  --accent:#4f46e5; --accent-ink:#fff; --accent-soft:#eceafe; --ok:#15803d; --ok-soft:#e6f4ea;
+  --warn:#9a5b06; --warn-soft:#fdf3e1; --err:#b42318; --err-soft:#fdecea;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#131316; --surface:#1c1c21; --surface-2:#26262d; --ink:#ececf1; --muted:#9a9aa4; --line:#33333c;
+    --accent:#8b85ff; --accent-ink:#121216; --accent-soft:#2a2850; --ok:#4ade80; --ok-soft:#163222;
+    --warn:#fbbf24; --warn-soft:#3a2e12; --err:#f87171; --err-soft:#3b1a1a;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,select,input,textarea{font:inherit;color:inherit}
+header{border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:5}
+.bar{max-width:1400px;margin:0 auto;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;font-size:17px}
+main{max-width:1400px;margin:0 auto;padding:16px 16px 60px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+h2{margin:0 0 6px;font-size:18px}
+h3{margin:0;font-size:15px}
+.muted,small{color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:500}
+a.btn{text-decoration:none;color:inherit}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.sm{padding:3px 9px;font-size:13px;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sel{border-color:var(--accent);background:var(--accent-soft)}
+select,input[type=number],input[type=text],textarea{padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface)}
+.badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.err{background:var(--err-soft);color:var(--err)}
+.badge.run{background:var(--accent-soft);color:var(--accent)}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center;cursor:pointer;display:block;margin:10px 0}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.plist{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.pitem{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid var(--line);border-radius:10px}
+.pitem img{width:64px;height:44px;object-fit:contain;background:#fff;border-radius:4px}
+.pitem .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.page{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
+.page-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+@media (max-width:1000px){.cmp{grid-template-columns:1fr}}
+.pane{border:1px solid var(--line);border-radius:10px;overflow:auto;background:#fff;color:#222;max-height:70vh}
+.pane img{display:block;max-width:100%;margin:0 auto}
+.pane .lbl{position:sticky;top:0;left:0;background:#f3f1ec;color:#555;font-size:12px;padding:3px 8px;z-index:1}
+.osmd{min-height:120px;padding:4px}
+details{margin-top:8px}
+details pre{max-height:260px;overflow:auto;background:var(--surface-2);padding:8px;border-radius:8px;font-size:12px;white-space:pre-wrap}
+.verdict{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.verdict input[type=text]{flex:1;min-width:200px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0}
+.fact{background:var(--surface-2);border-radius:10px;padding:8px 10px}
+.fact small{display:block}
+.note{border-radius:10px;padding:8px 12px;font-size:14px;margin:8px 0}
+.note.warn{background:var(--warn-soft);color:var(--warn)}
+.note.err{background:var(--err-soft);color:var(--err)}
+.play-grid{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:16px;align-items:start}
+@media (max-width:900px){.play-grid{grid-template-columns:1fr}}
+.line{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px}
+.line.off{opacity:.5}
+.line .sw{width:12px;height:12px;border-radius:3px;flex:none}
+.line .nm{flex:1;min-width:0;line-height:1.2}
+.line select{max-width:110px}
+.ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}
+.transport{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.play{width:52px;height:52px;border-radius:50%;border:none;background:var(--accent);color:var(--accent-ink);font-size:20px;cursor:pointer}
+.play:disabled{opacity:.4;cursor:not-allowed}
+.prog{flex:1;min-width:200px}
+.prog .trk{height:10px;border-radius:5px;background:var(--surface-2);cursor:pointer;position:relative;overflow:hidden}
+.prog i{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent)}
+.prog .info{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:4px}
+textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">🎼 Music Reader <span class="badge">v0 — test de reconnaissance</span></div>
+    <span class="spacer"></span>
+    <span class="badge" id="health">Connexion au serveur…</span>
+  </div>
+</header>
+
+<main>
+  <!-- 1. Pages -->
+  <section class="card">
+    <h2>1. Pages à analyser</h2>
+    <small>Images PNG/JPG d'une même musique, dans l'ordre de lecture. Chaque page est analysée par Audiveris, puis les pages sont mises bout à bout.</small>
+    <label class="drop" id="drop">
+      <input type="file" id="fileIn" accept="image/*" multiple hidden>
+      <b>Glissez des images ici ou cliquez pour choisir</b><br><small>Plusieurs fichiers possibles</small>
+    </label>
+    <div class="plist" id="plist"></div>
+    <div class="row">
+      <label>Agrandissement
+        <select id="scaleSel">
+          <option value="auto" selected>Auto (réessai si résolution trop faible)</option>
+          <option value="1">Aucun (×1)</option>
+          <option value="1.5">×1,5</option>
+          <option value="2">×2</option>
+          <option value="3">×3</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <button class="btn" id="clearBtn">Tout retirer</button>
+      <button class="btn primary" id="runBtn" disabled>Analyser</button>
+    </div>
+  </section>
+
+  <!-- 2. Résultats par page -->
+  <section class="card" id="resCard" hidden>
+    <h2>2. Résultats par page</h2>
+    <small>À gauche l'image envoyée, à droite la partition reconstruite à partir du MusicXML d'Audiveris. Compare-les et note chaque page.</small>
+    <div id="results"></div>
+  </section>
+
+  <!-- 3. Écoute -->
+  <section class="card" id="playCard" hidden>
+    <h2>3. Écoute de la musique assemblée</h2>
+    <div class="facts" id="facts"></div>
+    <div id="warns"></div>
+    <div class="play-grid">
+      <div>
+        <div class="row" style="justify-content:space-between;margin-bottom:6px">
+          <h3>Lignes</h3>
+          <label class="row" style="gap:6px;font-size:14px"><input type="checkbox" id="splitVoices"> Séparer les voix</label>
+        </div>
+        <div id="lines"></div>
+        <div class="row"><button class="btn sm" id="allOn">Toutes</button><button class="btn sm" id="allOff">Aucune</button></div>
+      </div>
+      <div>
+        <div class="ctl">
+          <b>Tempo</b> ♩ = <input type="number" id="tempo" min="30" max="240" style="width:80px"> BPM
+          <span class="badge" id="tempoSrc"></span>
+          <button class="btn sm" id="tempoReset">Réinitialiser</button>
+        </div>
+        <div class="ctl">
+          <b>Transposition</b>
+          <button class="btn sm" id="trDown">−</button>
+          <b id="trVal" style="min-width:3ch;text-align:center">0</b>
+          <button class="btn sm" id="trUp">+</button>
+          <span id="keyLbl" class="muted"></span>
+        </div>
+        <div class="transport">
+          <button class="play" id="play" aria-label="Lecture">▶</button>
+          <button class="btn" id="stop">■ Stop</button>
+          <div class="prog">
+            <div class="trk" id="trk"><i id="fill"></i></div>
+            <div class="info"><span id="posLbl"></span><span id="timeLbl"></span></div>
+          </div>
+        </div>
+        <small style="display:block;margin-top:6px">Reprises et sauts (D.C., coda) ne sont pas encore pris en compte : la partition est jouée telle qu'écrite.</small>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="expJson">💾 Exporter le projet (.json)</button>
+          <small>Format du plan, rechargeable dans la maquette.</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Bilan -->
+  <section class="card" id="reportCard" hidden>
+    <h2>4. Bilan du test</h2>
+    <small>Tableau récapitulatif à copier (pour le partager ou le garder).</small>
+    <div class="row" style="margin:8px 0"><button class="btn" id="copyReport">📋 Copier le bilan</button><small id="copyMsg"></small></div>
+    <textarea id="report" readonly></textarea>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const DEFAULT_TEMPO = 100;
+const PALETTE = ['#4f46e5','#0e9f6e','#d9480f','#b5179e','#0284c7','#a16207','#64748b','#dc2626'];
+const INSTRS = {piano:'Piano', flute:'Flûte', cordes:'Cordes', orgue:'Orgue'};
+const VERDICTS = {ok:'✅ Bon', minor:'⚠️ Erreurs mineures', bad:'❌ Inutilisable'};
+
+// ---------- État ----------
+let pages = [];   // {uid, file, name, url, w, h, status, job, scale, retried, error, scores:[{xml, parsed}], verdict, comment}
+let uid = 0;
+let merged = null;
+const lineSettings = new Map();   // préférences par ligne (conservées quand le modèle est reconstruit)
+const st = {tempo: DEFAULT_TEMPO, tempoTouched: false, transpose: 0};
+
+// ---------- Santé du serveur ----------
+fetch('/api/health').then(r => r.json()).then(h => {
+  const el = $('health');
+  if (!h.audiveris){ el.className = 'badge err'; el.textContent = 'Audiveris introuvable — lancer setup.ps1'; return; }
+  el.className = 'badge ok';
+  el.textContent = `Audiveris OK · OCR : ${h.ocrLanguages.join(', ') || 'aucune langue'}`;
+}).catch(() => { $('health').className = 'badge err'; $('health').textContent = 'Serveur injoignable'; });
+
+// ---------- 1. Pages ----------
+function addFiles(files){
+  for (const f of files){
+    if (!f.type.startsWith('image/')) continue;
+    const p = {uid: ++uid, file: f, name: f.name, url: URL.createObjectURL(f), status: 'pending', scores: [], verdict: '', comment: ''};
+    const img = new Image(); img.onload = () => { p.w = img.naturalWidth; p.h = img.naturalHeight; renderList(); }; img.src = p.url;
+    pages.push(p);
+  }
+  renderList();
+}
+function renderList(){
+  $('plist').innerHTML = pages.map((p, i) => `
+    <div class="pitem">
+      <b>${i+1}</b><img src="${p.url}" alt="">
+      <span class="nm" title="${esc(p.name)}">${esc(p.name)} <small>${p.w ? `${p.w}×${p.h}px` : ''}</small></span>
+      ${statusBadge(p)}
+      <button class="btn sm" data-a="up" data-i="${i}" ${i===0?'disabled':''}>↑</button>
+      <button class="btn sm" data-a="down" data-i="${i}" ${i===pages.length-1?'disabled':''}>↓</button>
+      <button class="btn sm" data-a="del" data-i="${i}">✕</button>
+    </div>`).join('');
+  $('runBtn').disabled = !pages.some(p => p.status === 'pending' || p.status === 'error');
+  $('runBtn').textContent = pages.some(p => p.status === 'done') ? 'Analyser les pages restantes' : 'Analyser';
+}
+function statusBadge(p){
+  switch (p.status){
+    case 'pending': return '<span class="badge">à analyser</span>';
+    case 'upload': return '<span class="badge run"><span class="spin"></span> envoi</span>';
+    case 'queued': return `<span class="badge run">en file${p.queuePos ? ` (${p.queuePos})` : ''}</span>`;
+    case 'running': return `<span class="badge run"><span class="spin"></span> analyse ${Math.round((p.elapsed||0)/1000)} s</span>`;
+    case 'done': return '<span class="badge ok">terminé</span>';
+    case 'error': return '<span class="badge err">échec</span>';
+  }
+  return '';
+}
+$('plist').addEventListener('click', e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const i = +b.dataset.i;
+  if (b.dataset.a === 'del'){ URL.revokeObjectURL(pages[i].url); pages.splice(i, 1); }
+  else { const j = b.dataset.a === 'up' ? i-1 : i+1; [pages[i], pages[j]] = [pages[j], pages[i]]; }
+  renderList(); renderResults(); rebuild();
+});
+$('fileIn').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+const drop = $('drop');
+['dragover','dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove('over')));
+drop.addEventListener('drop', e => { e.preventDefault(); addFiles(e.dataTransfer.files); });
+$('clearBtn').onclick = () => { stop(); pages.forEach(p => URL.revokeObjectURL(p.url)); pages = []; renderList(); renderResults(); rebuild(); };
+$('runBtn').onclick = () => {
+  const sel = $('scaleSel').value;
+  pages.filter(p => p.status === 'pending' || p.status === 'error').forEach(p => {
+    p.retried = false;
+    analyze(p, sel === 'auto' ? 1 : +sel, sel === 'auto');
+  });
+};
+
+// ---------- Analyse ----------
+async function scaleImage(file, f){
+  if (f === 1) return file;
+  const img = await createImageBitmap(file);
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * f); c.height = Math.round(img.height * f);
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height);
+  return new Promise(res => c.toBlob(res, 'image/png'));
+}
+async function analyze(p, scale, auto){
+  p.status = 'upload'; p.scale = scale; p.error = ''; p.scores = []; p.job = null;
+  renderList(); renderResults(); rebuild();
+  try {
+    const blob = await scaleImage(p.file, scale);
+    const r = await fetch('/api/jobs?name=' + encodeURIComponent(p.name), {method: 'POST', body: blob, headers: {'Content-Type': blob.type || 'application/octet-stream'}});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    p.job = j; p.status = j.status;
+    renderList();
+    while (p.status === 'queued' || p.status === 'running'){
+      await new Promise(res => setTimeout(res, 1000));
+      const jr = await fetch('/api/jobs/' + p.job.id);
+      const jj = await jr.json();
+      if (!jr.ok) throw new Error(jj.error || jr.statusText);
+      p.job = jj; p.status = jj.status; p.elapsed = jj.elapsedMs; p.queuePos = jj.queuePosition;
+      renderList();
+      updateLog(p);
+    }
+    if (p.status === 'error'){
+      if (auto && !p.retried && p.job.interlineTooLow && p.job.interline){
+        const f = Math.min(4, Math.max(1.5, Math.round(22 / p.job.interline * 2) / 2)) * scale;
+        p.retried = {from: p.job.interline, factor: f};
+        return analyze(p, f, true);
+      }
+      throw new Error(p.job.error || 'échec');
+    }
+    for (const s of p.job.scores){
+      const xml = await (await fetch(s.url)).text();
+      let parsed = null, perr = '';
+      try { parsed = parseMusicXml(xml); } catch (e){ perr = e.message; }
+      p.scores.push({name: s.name, url: s.url, xml, parsed, perr});
+    }
+  } catch (e){
+    p.status = 'error'; p.error = e.message;
+  }
+  renderList(); renderResults(); rebuild();
+}
+
+// ---------- 2. Résultats ----------
+function renderResults(){
+  $('resCard').hidden = !pages.some(p => p.status !== 'pending');
+  $('results').innerHTML = pages.map((p, i) => p.status === 'pending' ? '' : `
+    <div class="page" data-uid="${p.uid}">
+      <div class="page-head">
+        <h3>Page ${i+1}</h3><span class="muted">${esc(p.name)}</span> ${statusBadge(p)}
+        ${p.job?.elapsedMs && p.status === 'done' ? `<span class="badge">${(p.job.elapsedMs/1000).toFixed(1)} s</span>` : ''}
+        ${p.scale && p.scale !== 1 ? `<span class="badge warn">agrandie ×${p.scale}</span>` : ''}
+        ${p.job?.interline ? `<span class="badge ${p.job.interlineTooLow ? 'err' : ''}">interligne ${p.job.interline} px</span>` : ''}
+        ${p.job?.measures ? `<span class="badge">${p.job.measures} mesures détectées</span>` : ''}
+        <span class="spacer"></span>
+        ${p.status === 'done' || p.status === 'error' ? `
+          <select class="rescale" aria-label="Agrandissement">${[1,1.5,2,3].map(f => `<option value="${f}" ${f===(p.scale||1)?'selected':''}>×${f}</option>`).join('')}</select>
+          <button class="btn sm" data-rerun="${p.uid}">Relancer</button>` : ''}
+        ${p.scores.map(s => `<a class="btn sm" href="${s.url}" download="${esc(s.name.replace(/\.mxl$/i, '.musicxml'))}">MusicXML</a>`).join('')}
+      </div>
+      ${p.retried ? `<div class="note warn">Résolution trop faible (interligne ${p.retried.from} px) : image agrandie automatiquement ×${p.retried.factor} et analysée à nouveau.</div>` : ''}
+      ${p.error ? `<div class="note err">${esc(p.error)}</div>` : ''}
+      ${p.scores.filter(s => s.perr).map(s => `<div class="note err">Lecture du MusicXML impossible : ${esc(s.perr)}</div>`).join('')}
+      <div class="cmp">
+        <div class="pane"><div class="lbl">Image d'origine</div><img src="${p.url}" alt="Page ${i+1}"></div>
+        <div class="pane"><div class="lbl">Partition reconstruite</div>${p.scores.length ? p.scores.map((_, k) => `<div class="osmd-slot" id="osmd-${p.uid}-${k}"></div>`).join('') : `<div class="osmd muted" style="padding:16px">${p.status === 'error' ? 'Aucun résultat.' : '<span class="spin"></span> En attente du résultat…'}</div>`}</div>
+      </div>
+      ${p.status === 'done' ? `
+      <div class="verdict">
+        <b>Verdict :</b>
+        ${Object.entries(VERDICTS).map(([k, v]) => `<button class="btn sm ${p.verdict === k ? 'sel' : ''}" data-verdict="${k}">${v}</button>`).join('')}
+        <input type="text" class="comment" placeholder="Commentaire (notes fausses, rythmes, lignes manquantes…)" value="${esc(p.comment)}">
+      </div>` : ''}
+      <details><summary>Journal Audiveris</summary><pre class="log">${esc((p.job?.log || []).join('\n'))}</pre></details>
+    </div>`).join('');
+  pages.forEach(p => p.scores.forEach((s, k) => {
+    const slot = document.getElementById(`osmd-${p.uid}-${k}`);
+    if (!slot) return;
+    if (s.el) return slot.replaceWith(s.el);   // rendu déjà fait : on le réutilise
+    slot.className = 'osmd'; s.el = slot; drawScore(slot, s);
+  }));
+}
+function updateLog(p){
+  const el = document.querySelector(`.page[data-uid="${p.uid}"] .log`);
+  if (el) el.textContent = (p.job?.log || []).join('\n'); else renderResults();
+  const head = document.querySelector(`.page[data-uid="${p.uid}"] .page-head .badge.run`);
+  if (head) head.outerHTML = statusBadge(p);
+}
+async function drawScore(el, s){
+  if (!el || !window.opensheetmusicdisplay) return;
+  try {
+    const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {autoResize: true, backend: 'svg', drawTitle: !!s.parsed?.title, drawingParameters: 'compacttight'});
+    await osmd.load(s.xml);
+    osmd.render();
+  } catch (e){
+    el.innerHTML = `<div class="note err">Affichage impossible : ${esc(e.message)}</div>`;
+  }
+}
+$('results').addEventListener('click', e => {
+  const card = e.target.closest('.page'); if (!card) return;
+  const p = pages.find(x => x.uid === +card.dataset.uid);
+  const v = e.target.closest('[data-verdict]');
+  if (v){
+    p.verdict = p.verdict === v.dataset.verdict ? '' : v.dataset.verdict;
+    card.querySelectorAll('[data-verdict]').forEach(b => b.classList.toggle('sel', b.dataset.verdict === p.verdict));
+    renderReport();
+  }
+  if (e.target.closest('[data-rerun]')){ p.retried = false; analyze(p, +card.querySelector('.rescale').value, false); }
+});
+$('results').addEventListener('input', e => {
+  if (!e.target.classList.contains('comment')) return;
+  pages.find(x => x.uid === +e.target.closest('.page').dataset.uid).comment = e.target.value;
+  renderReport();
+});
+
+// ---------- Lecture du MusicXML ----------
+const STEP = {C:0, D:2, E:4, F:5, G:7, A:9, B:11};
+const UNIT = {whole:4, half:2, quarter:1, eighth:.5, '16th':.25};
+const TEMPO_WORDS = [
+  ['prestissimo',200], ['presto',180], ['vivacissimo',172], ['vivace',160], ['allegro moderato',116], ['allegretto',112],
+  ['allegro',132], ['moderato',108], ['andantino',96], ['andante',84], ['adagietto',72], ['adagio',66],
+  ['larghetto',60], ['lento',52], ['largo',48], ['grave',40],
+];
+const MAJOR_NAMES = ['Do♭','Sol♭','Ré♭','La♭','Mi♭','Si♭','Fa','Do','Sol','Ré','La','Mi','Si','Fa♯','Do♯'];
+const MINOR_NAMES = ['La♭','Mi♭','Si♭','Fa','Do','Sol','Ré','La','Mi','Si','Fa♯','Do♯','Sol♯','Ré♯','La♯'];
+const PC_NAMES = ['Do','Do♯','Ré','Mi♭','Mi','Fa','Fa♯','Sol','La♭','La','Si♭','Si'];
+const PC_CODES = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const SHARP_SPELL = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+function parseMusicXml(text){
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('XML invalide');
+  const root = doc.documentElement;
+  if (root.tagName !== 'score-partwise') throw new Error(`format ${root.tagName} non géré`);
+  const partNames = {};
+  root.querySelectorAll('part-list > score-part').forEach(sp => partNames[sp.id] = sp.querySelector('part-name')?.textContent.trim() || sp.id);
+  const r = {title: root.querySelector('work > work-title')?.textContent.trim() || root.querySelector('movement-title')?.textContent.trim() || '',
+             fifths: null, mode: 'major', beats: null, beatType: null, tempo: null, tempoSource: '', notes: [], measures: [], staves: {}, total: 0};
+  const kids = (el, tag) => [...el.children].filter(c => c.tagName === tag);
+  kids(root, 'part').forEach((part, pi) => {
+    let div = 1, pos = 0, prevStart = 0;
+    const clefs = {}, open = new Map();
+    r.staves[pi] = 1;
+    kids(part, 'measure').forEach(m => {
+      let maxPos = pos;
+      if (pi === 0) r.measures.push({start: pos, number: m.getAttribute('number')});
+      for (const el of m.children){
+        const dur = () => (+el.querySelector(':scope > duration')?.textContent || 0) / div;
+        switch (el.tagName){
+          case 'attributes': {
+            const d = el.querySelector(':scope > divisions'); if (d) div = +d.textContent || 1;
+            const stv = el.querySelector(':scope > staves'); if (stv) r.staves[pi] = +stv.textContent;
+            const f = el.querySelector('key > fifths');
+            if (f && r.fifths === null){ r.fifths = +f.textContent; r.mode = el.querySelector('key > mode')?.textContent || 'major'; }
+            const b = el.querySelector('time > beats');
+            if (b && r.beats === null){ r.beats = b.textContent; r.beatType = el.querySelector('time > beat-type')?.textContent; }
+            el.querySelectorAll(':scope > clef').forEach(c => clefs[c.getAttribute('number') || '1'] = c.querySelector('sign')?.textContent);
+            break;
+          }
+          case 'direction': case 'sound': readTempo(r, el, m.getAttribute('number')); break;
+          case 'backup': pos -= dur(); break;
+          case 'forward': pos += dur(); maxPos = Math.max(maxPos, pos); break;
+          case 'note': {
+            if (el.querySelector(':scope > grace')) break;
+            const d = dur();
+            const chord = !!el.querySelector(':scope > chord');
+            const start = chord ? prevStart : pos;
+            if (!chord){ prevStart = pos; pos += d; maxPos = Math.max(maxPos, pos); }
+            const p = el.querySelector(':scope > pitch');
+            if (!p || d <= 0) break;
+            const step = p.querySelector('step').textContent, alter = Math.round(+(p.querySelector('alter')?.textContent || 0));
+            const oct = +p.querySelector('octave').textContent;
+            const midi = (oct + 1) * 12 + STEP[step] + alter;
+            const staff = el.querySelector(':scope > staff')?.textContent || '1';
+            const voice = el.querySelector(':scope > voice')?.textContent || '1';
+            const ties = [...el.querySelectorAll(':scope > tie')].map(t => t.getAttribute('type'));
+            const tk = `${pi}|${staff}|${voice}|${midi}`;
+            if (ties.includes('stop') && open.has(tk)){
+              const n = open.get(tk); n.d = start + d - n.start;
+              if (!ties.includes('start')) open.delete(tk);
+              break;
+            }
+            const pitch = Math.abs(alter) <= 1 ? step + (alter === 1 ? '#' : alter === -1 ? 'b' : '') + oct
+                                               : SHARP_SPELL[midi % 12] + (Math.floor(midi / 12) - 1);
+            const note = {midi, pitch, start, d, pi, staff, voice, clef: clefs[staff] || 'G', partName: partNames[part.id] || `Partie ${pi+1}`};
+            r.notes.push(note);
+            if (ties.includes('start')) open.set(tk, note);
+          }
+        }
+      }
+      pos = maxPos;
+    });
+    r.total = Math.max(r.total, pos);
+  });
+  return r;
+}
+function readTempo(r, el, measure){
+  if (r.tempo !== null) return;
+  const s = el.tagName === 'sound' ? el : el.querySelector('sound[tempo]');
+  if (s && +s.getAttribute('tempo') > 0){ r.tempo = Math.round(+s.getAttribute('tempo')); r.tempoSource = `lu (mesure ${measure})`; return; }
+  const met = el.querySelector('metronome');
+  const pm = +met?.querySelector('per-minute')?.textContent;
+  if (pm){
+    const unit = met.querySelector('beat-unit')?.textContent, dotted = !!met.querySelector('beat-unit-dot');
+    r.tempo = Math.round(pm * (UNIT[unit] || 1) * (dotted ? 1.5 : 1));
+    r.tempoSource = `métronome ${unit || ''} = ${pm} (mesure ${measure})`; return;
+  }
+  const words = [...el.querySelectorAll('words')].map(w => w.textContent).join(' ').toLowerCase();
+  const hit = TEMPO_WORDS.find(([w]) => words.includes(w));
+  if (hit){ r.tempo = hit[1]; r.tempoSource = `« ${hit[0]} » → ${hit[1]} (mesure ${measure})`; }
+}
+
+// ---------- Assemblage des pages ----------
+function rebuild(){
+  const done = pages.filter(p => p.status === 'done' && p.scores.some(s => s.parsed));
+  $('playCard').hidden = !done.length;
+  renderReport();
+  if (!done.length){ merged = null; return; }
+  const split = $('splitVoices').checked;
+  const lines = new Map(), measures = [], warns = [];
+  let offset = 0, first = null, refKeys = null;
+  done.forEach(p => {
+    const pageNo = pages.indexOf(p) + 1;
+    const keys = new Set();
+    p.scores.filter(s => s.parsed).forEach(s => {
+      const r = s.parsed;
+      first ??= r;
+      r.measures.forEach(m => measures.push({start: m.start + offset, page: pageNo, number: m.number}));
+      r.notes.forEach(n => {
+        const key = split ? `${n.pi}|${n.staff}|${n.voice}` : `${n.pi}|${n.staff}`;
+        keys.add(key);
+        if (!lines.has(key)){
+          const multiStaff = (r.staves[n.pi] || 1) > 1;
+          lines.set(key, {key, name: n.partName + (multiStaff ? ` — portée ${n.staff}` : '') + (split ? ` — voix ${n.voice}` : ''),
+                          clef: n.clef === 'F' ? 'bass' : 'treble', notes: []});
+        }
+        lines.get(key).notes.push({midi: n.midi, pitch: n.pitch, start: n.start + offset, d: n.d});
+      });
+      offset += r.total;
+    });
+    if (refKeys && [...keys].sort().join() !== [...refKeys].sort().join())
+      warns.push(`Page ${pageNo} : lignes détectées différentes de la page ${pages.indexOf(done[0]) + 1} (${keys.size} au lieu de ${refKeys.size}). Le raccord se fait par position.`);
+    refKeys ??= keys;
+  });
+  const failed = pages.filter(p => p.status === 'error').length;
+  if (failed) warns.push(`${failed} page(s) en échec ignorée(s) dans l'assemblage.`);
+  const sorted = [...lines.values()].sort((a, b) => a.key.localeCompare(b.key, undefined, {numeric: true}));
+  sorted.forEach((l, i) => {
+    const s = lineSettings.get(l.key) || {on: true, instr: l.clef === 'bass' ? 'cordes' : 'piano', vol: .8};
+    lineSettings.set(l.key, s);
+    Object.assign(l, {color: PALETTE[i % PALETTE.length], settings: s});
+  });
+  merged = {lines: sorted, total: offset, measures, first, pages: done.length, warns};
+  if (!st.tempoTouched) st.tempo = first.tempo || DEFAULT_TEMPO;
+  renderPlay();
+}
+function keyName(t = 0){
+  const f = merged.first.fifths ?? 0;   // pas de <key> : aucune armure, donc Do majeur / La mineur
+  if (f < -7 || f > 7) return 'non détectée';
+  const minor = merged.first.mode === 'minor';
+  if (!t) return (minor ? MINOR_NAMES : MAJOR_NAMES)[f + 7] + (minor ? ' mineur' : ' majeur');
+  const pc = ((f * 7) % 12 + 12 + (minor ? 9 : 0) + t) % 12;
+  return PC_NAMES[(pc + 12) % 12] + (minor ? ' mineur' : ' majeur');
+}
+function renderPlay(){
+  stop();
+  const f = merged.first, nNotes = merged.lines.reduce((a, l) => a + l.notes.length, 0);
+  $('facts').innerHTML = [
+    ['Pages assemblées', `${merged.pages} / ${pages.length}`],
+    ['Lignes', merged.lines.length],
+    ['Mesures', merged.measures.length],
+    ['Notes', nNotes],
+    ['Tonalité', keyName()],
+    ['Mesure', f.beats ? `${f.beats}/${f.beatType}` : 'non détectée'],
+    ['Tempo', f.tempo ? `♩ = ${f.tempo}` : 'non indiqué → 100'],
+  ].map(([k, v]) => `<div class="fact"><small>${k}</small><b>${v}</b></div>`).join('');
+  $('warns').innerHTML = merged.warns.map(w => `<div class="note warn">${esc(w)}</div>`).join('');
+  $('lines').innerHTML = merged.lines.map((l, i) => `
+    <div class="line ${l.settings.on ? '' : 'off'}" data-i="${i}">
+      <input type="checkbox" data-k="on" ${l.settings.on ? 'checked' : ''} aria-label="Activer">
+      <span class="sw" style="background:${l.color}"></span>
+      <span class="nm">${esc(l.name)}<br><small>${l.clef === 'bass' ? 'Clé de fa' : 'Clé de sol'} · ${l.notes.length} notes</small></span>
+      <select data-k="instr" aria-label="Instrument">${Object.entries(INSTRS).map(([k, v]) => `<option value="${k}" ${k === l.settings.instr ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      <button class="btn sm" data-k="solo">Solo</button>
+    </div>`).join('');
+  $('tempo').value = st.tempo;
+  $('tempoSrc').className = 'badge ' + (f.tempo ? 'ok' : 'warn');
+  $('tempoSrc').textContent = f.tempo ? f.tempoSource : 'par défaut';
+  refreshKey(); refreshPlayable(); updateUI(0);
+}
+function refreshPlayable(){
+  document.querySelectorAll('.line').forEach(el => {
+    const l = merged.lines[+el.dataset.i];
+    el.classList.toggle('off', !l.settings.on); el.querySelector('[data-k=on]').checked = l.settings.on;
+  });
+  $('play').disabled = !merged.lines.some(l => l.settings.on);
+}
+function refreshKey(){
+  $('trVal').textContent = (st.transpose > 0 ? '+' : '') + st.transpose;
+  $('keyLbl').textContent = st.transpose ? `${keyName()} → ${keyName(st.transpose)}` : keyName();
+}
+$('lines').addEventListener('input', e => {
+  const l = merged.lines[+e.target.closest('.line').dataset.i];
+  if (e.target.dataset.k === 'on') l.settings.on = e.target.checked;
+  if (e.target.dataset.k === 'instr') l.settings.instr = e.target.value;
+  refreshPlayable(); restartIfPlaying();
+});
+$('lines').addEventListener('click', e => {
+  if (!e.target.closest('[data-k=solo]')) return;
+  const i = +e.target.closest('.line').dataset.i;
+  merged.lines.forEach((l, j) => l.settings.on = i === j);
+  refreshPlayable(); restartIfPlaying();
+});
+$('allOn').onclick = () => { merged.lines.forEach(l => l.settings.on = true); refreshPlayable(); restartIfPlaying(); };
+$('allOff').onclick = () => { merged.lines.forEach(l => l.settings.on = false); refreshPlayable(); pause(); };
+$('splitVoices').onchange = rebuild;
+$('tempo').onchange = e => { st.tempo = Math.max(30, Math.min(240, Math.round(+e.target.value) || DEFAULT_TEMPO)); st.tempoTouched = true; e.target.value = st.tempo; restartIfPlaying(); updateUI(curBeat()); };
+$('tempoReset').onclick = () => { st.tempoTouched = false; st.tempo = merged.first.tempo || DEFAULT_TEMPO; $('tempo').value = st.tempo; restartIfPlaying(); updateUI(curBeat()); };
+$('trDown').onclick = () => { st.transpose = Math.max(-12, st.transpose - 1); refreshKey(); restartIfPlaying(); };
+$('trUp').onclick = () => { st.transpose = Math.min(12, st.transpose + 1); refreshKey(); restartIfPlaying(); };
+
+// ---------- Moteur audio (repris de la maquette) ----------
+let ctx = null, master = null, playing = false, t0 = 0, beat0 = 0, sp0 = .6, pausedBeat = 0, raf = 0;
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+const curBeat = () => playing ? beat0 + (ctx.currentTime - t0) / sp0 : pausedBeat;
+function env(g, t, dur, peak, a, s, r){
+  g.setValueAtTime(0, t); g.linearRampToValueAtTime(peak, t + a);
+  g.linearRampToValueAtTime(peak * s, t + Math.min(dur, a + .1));
+  g.setValueAtTime(peak * s, t + dur); g.linearRampToValueAtTime(0, t + dur + r);
+  return t + dur + r + .02;
+}
+function voice(instr, f, t, dur, vol){
+  const out = ctx.createGain(); out.connect(master);
+  const g = out.gain, peak = .14 * vol, oscs = [];
+  const mk = (type, freq, gain, to) => { const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq; const gg = ctx.createGain(); gg.gain.value = gain; o.connect(gg); gg.connect(to); oscs.push(o); };
+  const lp = cut => { const b = ctx.createBiquadFilter(); b.type = 'lowpass'; b.frequency.value = cut; b.connect(out); return b; };
+  let end;
+  if (instr === 'piano'){ mk('triangle', f, 1, out); mk('sine', f*2, .25, out); g.setValueAtTime(0, t); g.linearRampToValueAtTime(peak*1.4, t+.006); g.exponentialRampToValueAtTime(.0004, t + dur + .45); end = t + dur + .5; }
+  else if (instr === 'orgue'){ const b = lp(2400); mk('square', f, .45, b); mk('sine', f/2, .6, b); end = env(g, t, dur, peak*.9, .02, 1, .06); }
+  else if (instr === 'flute'){ mk('sine', f, 1, out); mk('sine', f*2, .07, out); end = env(g, t, dur, peak*1.3, .06, .85, .12); }
+  else { const b = lp(1500); mk('sawtooth', f, .5, b); mk('sawtooth', f*1.005, .5, b); end = env(g, t, dur, peak*.9, .09, .8, .25); }
+  oscs.forEach(o => { o.start(t); o.stop(end); });
+}
+function start(from){
+  if (!merged || !merged.lines.some(l => l.settings.on)) return;
+  ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+  ctx.resume();
+  master = ctx.createGain(); master.gain.value = .9;
+  const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+  sp0 = 60 / st.tempo; t0 = ctx.currentTime + .08; beat0 = from; playing = true;
+  merged.lines.forEach(l => l.settings.on && l.notes.forEach(n => {
+    if (n.start < from - 1e-6) return;
+    voice(l.settings.instr, hz(n.midi + st.transpose), t0 + (n.start - from) * sp0, Math.max(.05, n.d * sp0 * .92), l.settings.vol);
+  }));
+  $('play').textContent = '❚❚';
+  cancelAnimationFrame(raf); tick();
+}
+function stopAudio(){
+  if (master){ const m = master; m.gain.setTargetAtTime(0, ctx.currentTime, .015); setTimeout(() => m.disconnect(), 120); master = null; }
+  playing = false; cancelAnimationFrame(raf); $('play').textContent = '▶';
+}
+function pause(){ if (playing){ pausedBeat = curBeat(); stopAudio(); } }
+function stop(){ stopAudio(); pausedBeat = 0; if (merged) updateUI(0); }
+function restartIfPlaying(){ if (playing){ const b = curBeat(); stopAudio(); start(b); } }
+function tick(){
+  const b = curBeat();
+  if (b >= merged.total){ stop(); return; }
+  updateUI(b); raf = requestAnimationFrame(tick);
+}
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+function updateUI(b){
+  if (!merged) return;
+  const sp = 60 / st.tempo;
+  $('fill').style.width = (merged.total ? b / merged.total * 100 : 0) + '%';
+  const m = merged.measures.filter(x => x.start <= b + 1e-6).pop() || merged.measures[0];
+  $('posLbl').textContent = m ? `Page ${m.page} · mesure ${m.number}` : '';
+  $('timeLbl').textContent = `${fmt(b * sp)} / ${fmt(merged.total * sp)}`;
+}
+$('play').onclick = () => playing ? pause() : start(pausedBeat >= merged.total ? 0 : pausedBeat);
+$('stop').onclick = stop;
+$('trk').onclick = e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  const b = Math.max(0, Math.min(merged.total - .01, (e.clientX - r.left) / r.width * merged.total));
+  if (playing){ stopAudio(); start(b); } else { pausedBeat = b; updateUI(b); }
+};
+
+// ---------- Export JSON (format du plan) ----------
+$('expJson').onclick = () => {
+  const f = merged.first;
+  const pcMajor = f.fifths === null ? 0 : ((f.fifths * 7) % 12 + 12) % 12;
+  const title = f.title || pages[0]?.name.replace(/\.[^.]+$/, '') || 'Partition';
+  const data = {
+    format: 'music-reader', version: 1, title, createdAt: new Date().toISOString(),
+    score: {pages: merged.pages, timeSignature: [+f.beats || 4, +f.beatType || 4],
+            key: PC_CODES[f.mode === 'minor' ? (pcMajor + 9) % 12 : pcMajor], mode: f.mode, detectedTempo: f.tempo},
+    settings: {tempo: st.tempo, transpose: st.transpose, loop: false},
+    parts: merged.lines.map(l => ({
+      name: l.name, clef: l.clef, color: l.color, enabled: l.settings.on, instrument: l.settings.instr, volume: l.settings.vol,
+      notes: l.notes.map(n => ({pitch: n.pitch, start: +n.start.toFixed(4), duration: +n.d.toFixed(4)})),
+    })),
+  };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
+  a.download = title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').toLowerCase() + '.music-reader.json';
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+
+// ---------- 4. Bilan ----------
+function renderReport(){
+  const rows = pages.filter(p => p.status === 'done' || p.status === 'error');
+  $('reportCard').hidden = !rows.length;
+  if (!rows.length) return;
+  const cell = t => String(t ?? '').replace(/\|/g, '/').replace(/\n/g, ' ');
+  const lines = [
+    `Bilan Music Reader v0 — ${new Date().toLocaleString('fr-FR')}`, '',
+    '| # | Fichier | Taille | Agrand. | Temps | Interligne | Mesures | Lignes | Tempo | Verdict | Commentaire |',
+    '|---|---|---|---|---|---|---|---|---|---|---|',
+    ...rows.map(p => {
+      const r = p.scores.find(s => s.parsed)?.parsed;
+      const nLines = r ? new Set(r.notes.map(n => `${n.pi}|${n.staff}`)).size : '';
+      return `| ${pages.indexOf(p) + 1} | ${cell(p.name)} | ${p.w}×${p.h} | ×${p.scale || 1} | ${p.job?.elapsedMs ? (p.job.elapsedMs / 1000).toFixed(1) + ' s' : ''} | ${p.job?.interline ?? ''} | ${r ? r.measures.length : ''} | ${nLines} | ${r?.tempo ? cell(r.tempo + ' (' + r.tempoSource + ')') : r ? 'défaut' : ''} | ${p.status === 'error' ? '❌ échec : ' + cell(p.error) : VERDICTS[p.verdict] || '—'} | ${cell(p.comment)} |`;
+    }),
+  ];
+  $('report').value = lines.join('\n');
+}
+$('copyReport').onclick = async () => {
+  try { await navigator.clipboard.writeText($('report').value); $('copyMsg').textContent = 'Copié.'; }
+  catch { $('report').select(); $('copyMsg').textContent = 'Sélectionné : Ctrl+C pour copier.'; }
+};
+</script>
+</body>
+</html>

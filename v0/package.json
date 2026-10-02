@@ -1,0 +1,14 @@
+{
+  "name": "music-reader-v0",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Banc de test de la reconnaissance de partitions (Audiveris) : analyse, comparaison visuelle, écoute.",
+  "type": "module",
+  "scripts": {
+    "setup": "powershell -ExecutionPolicy Bypass -File setup.ps1",
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
