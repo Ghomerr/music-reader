@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecteur de partitions</title>
+<style>
+:root{
+  --bg:#f6f5f2; --surface:#ffffff; --surface-2:#f0eee9; --ink:#1d1d1f; --muted:#6b6b72; --line:#e2dfd8;
+  --accent:#4f46e5; --accent-ink:#ffffff; --accent-soft:#eceafe; --ok:#15803d; --warn:#9a5b06; --warn-soft:#fdf3e1;
+  --err:#b42318; --err-soft:#fdecea;
+  --paper:#fffdf8; --paper-ink:#222;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#131316; --surface:#1c1c21; --surface-2:#26262d; --ink:#ececf1; --muted:#9a9aa4; --line:#33333c;
+    --accent:#8b85ff; --accent-ink:#121216; --accent-soft:#2a2850; --ok:#4ade80; --warn:#fbbf24; --warn-soft:#3a2e12;
+    --err:#f87171; --err-soft:#3b1a1a;
+    --paper:#fbf8f0; --paper-ink:#222;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,select,input{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar{max-width:1180px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px}
+.brand span:first-child{font-size:22px}
+.steps{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);cursor:default;font-size:14px}
+.step b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);font-size:12px}
+.step.done{cursor:pointer;color:var(--ink)}
+.step.done b{background:var(--ok);color:#fff}
+.step.cur{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.step.cur b{background:var(--accent);color:var(--accent-ink)}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+h2{margin:0 0 4px;font-size:20px}
+h3{margin:0 0 10px;font-size:15px}
+.muted{color:var(--muted)}
+small{color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 16px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.sm{padding:4px 10px;font-size:13px;border-radius:8px}
+.btn.icon{padding:2px 8px;font-size:13px;border-radius:7px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row.end{justify-content:flex-end}
+.row.center{justify-content:center}
+.narrow{max-width:860px;margin:0 auto}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:2px dashed var(--line);border-radius:14px;padding:36px 16px;margin:18px 0 12px;cursor:pointer;text-align:center;transition:.15s}
+.drop:hover,#s1 .card.over .drop{border-color:var(--accent);background:var(--accent-soft)}
+#s1 .card.over{outline:2px dashed var(--accent);outline-offset:4px}
+.drop .ico{font-size:34px}
+.or{text-align:center;color:var(--muted);margin:6px 0 10px;font-size:13px}
+.paper{background:var(--paper);color:var(--paper-ink);border-radius:10px;border:1px solid var(--line);overflow:hidden}
+.paper svg{display:block;width:100%;height:auto}
+.pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:16px 0}
+.pg{border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--surface-2)}
+.thumb{height:210px;display:flex;align-items:center;justify-content:center}
+.thumb img{max-width:100%;max-height:100%;object-fit:contain}
+.pg-bar{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-top:8px}
+.pg-bar .name{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.pg.add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:2px dashed var(--line);background:transparent;cursor:pointer;min-height:252px;color:var(--muted)}
+.pg.add:hover{border-color:var(--accent);color:var(--accent)}
+.pg.add span{font-size:30px}
+.stages{list-style:none;padding:0;margin:18px 0}
+.stages li{display:flex;align-items:center;gap:10px;padding:6px 0;color:var(--muted)}
+.stages li.run,.stages li.ok{color:var(--ink)}
+.stages .st{width:20px;height:20px;display:inline-grid;place-items:center;flex:none}
+.spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}
+.fact{background:var(--surface-2);border-radius:10px;padding:10px 12px}
+.fact small{display:block}
+.fact b{font-size:16px}
+.note{border-radius:10px;padding:10px 12px;font-size:14px;margin:10px 0}
+.note.warn{background:var(--warn-soft);color:var(--warn)}
+.note.err{background:var(--err-soft);color:var(--err)}
+.note.info{background:var(--accent-soft);color:var(--ink)}
+.layout{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.side{display:flex;flex-direction:column;gap:16px}
+.part{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+.part.off{opacity:.55}
+.part-head{display:flex;align-items:center;gap:10px;cursor:pointer}
+.part-head input{width:18px;height:18px;accent-color:var(--accent)}
+.part-head .sw{width:12px;height:12px;border-radius:3px;flex:none}
+.part-head .lbl{display:flex;flex-direction:column;line-height:1.25;flex:1}
+.part-ctrl{display:flex;gap:8px;align-items:center;margin-top:8px;padding-left:28px}
+.part-ctrl select{flex:1;min-width:0;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--surface)}
+.part-ctrl input[type=range]{width:90px}
+input[type=range]{accent-color:var(--accent)}
+.badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.badge.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.tempo-val{display:flex;align-items:baseline;gap:6px;margin:8px 0}
+.tempo-val input{width:76px;font-size:22px;font-weight:700;padding:2px 6px;border-radius:8px;border:1px solid var(--line);background:var(--surface)}
+.text-in{width:100%;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);margin:4px 0 10px}
+.full{width:100%}
+.stepper{display:flex;align-items:center;gap:8px;margin:8px 0}
+.stepper .val{flex:1;text-align:center}
+.stepper .val b{font-size:22px;display:block;line-height:1.1}
+.round{width:40px;height:40px;border-radius:50%;padding:0;font-size:20px}
+.transport{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.play{width:56px;height:56px;border-radius:50%;border:none;background:var(--accent);color:var(--accent-ink);font-size:22px;cursor:pointer;display:grid;place-items:center}
+.play:disabled{opacity:.4;cursor:not-allowed}
+.prog-wrap{flex:1;min-width:200px}
+.prog{height:10px;border-radius:5px;background:var(--surface-2);cursor:pointer;position:relative;overflow:hidden}
+.prog i{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent);border-radius:5px}
+.prog-info{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:4px}
+.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
+.score-cap{font-size:13px;color:var(--muted);margin-top:8px}
+.export-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nt.on{color:var(--c)}
+.nt.on ellipse{stroke-width:2.4}
+svg.off-0 .pg-0, svg.off-1 .pg-1, svg.off-2 .pg-2, svg.off-3 .pg-3, svg.off-4 .pg-4, svg.off-5 .pg-5{opacity:.22}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand"><span>🎼</span> Lecteur de partitions <span class="badge">maquette v2</span></div>
+    <nav class="steps" id="steps">
+      <div class="step cur" data-s="1"><b>1</b>Importer</div>
+      <div class="step" data-s="2"><b>2</b>Analyser</div>
+      <div class="step" data-s="3"><b>3</b>Écouter</div>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ÉTAPE 1 -->
+  <section id="s1" class="narrow">
+    <div class="card" id="s1card">
+      <h2>Importer une partition</h2>
+      <p class="muted" style="margin:0">Une ou plusieurs pages (PNG, JPG) d'une même musique, dans l'ordre de lecture. Ou rouvre un projet sauvegardé.</p>
+
+      <div id="pick">
+        <label class="drop">
+          <input type="file" class="fileIn" accept="image/*" multiple hidden>
+          <div class="ico">📄</div>
+          <b>Glissez une ou plusieurs pages ici, ou cliquez pour choisir</b>
+          <small>Scans ou images de bonne qualité</small>
+        </label>
+        <div class="or">ou</div>
+        <div class="row center">
+          <button class="btn" id="useExample">Partition d'exemple (2 pages, 3 lignes)</button>
+          <label class="btn">📂 Ouvrir un projet (.json)<input type="file" id="projIn" accept=".json,application/json" hidden></label>
+        </div>
+      </div>
+
+      <div id="pagesBox" hidden>
+        <div class="row" style="justify-content:space-between;margin-top:16px">
+          <b id="pagesCount"></b>
+          <div class="row" style="gap:6px">
+            <label class="btn sm">📂 Ouvrir un projet<input type="file" class="projIn2" accept=".json,application/json" hidden></label>
+            <button class="btn sm" id="clearPages">Tout retirer</button>
+          </div>
+        </div>
+        <div class="pages" id="pages"></div>
+        <div class="row end">
+          <button class="btn primary" id="analyze">Analyser →</button>
+        </div>
+      </div>
+      <div class="note err" id="loadErr" hidden></div>
+    </div>
+  </section>
+
+  <!-- ÉTAPE 2 -->
+  <section id="s2" class="narrow" hidden>
+    <div class="card">
+      <h2 id="s2title">Analyse en cours…</h2>
+      <p class="muted" style="margin:0">Reconnaissance optique de chaque page, puis assemblage en une seule musique.</p>
+      <ul class="stages" id="stages"></ul>
+      <div id="summary" hidden>
+        <div class="facts" id="facts"></div>
+        <div id="tempoNote"></div>
+        <div class="note info" id="simNote" hidden>Maquette : l'analyse de tes images est simulée, ce sont les notes de l'exemple qui sont utilisées.</div>
+        <div class="row end" style="margin-top:14px">
+          <button class="btn" id="back1">← Modifier les pages</button>
+          <button class="btn primary" id="toPlay">Régler et écouter →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ÉTAPE 3 -->
+  <section id="s3" hidden>
+    <div class="note info" id="projNote" hidden style="margin-top:0"></div>
+    <div class="layout">
+      <aside class="side">
+        <div class="card">
+          <div class="row" style="justify-content:space-between;margin-bottom:8px">
+            <h3 style="margin:0">Lignes à jouer</h3>
+            <div class="row" style="gap:6px">
+              <button class="btn sm" id="allOn">Toutes</button>
+              <button class="btn sm" id="allOff">Aucune</button>
+            </div>
+          </div>
+          <div id="parts"></div>
+        </div>
+
+        <div class="card">
+          <div class="row" style="justify-content:space-between">
+            <h3 style="margin:0">Tempo</h3>
+            <span class="badge" id="tempoBadge"></span>
+          </div>
+          <div class="tempo-val">
+            <span style="font-size:22px">♩ =</span>
+            <input type="number" id="tempoNum" min="30" max="240">
+            <span class="muted">BPM</span>
+          </div>
+          <input type="range" id="tempoRange" min="30" max="240" class="full">
+          <div class="row" style="margin-top:8px">
+            <button class="btn sm" data-dt="-10">−10</button>
+            <button class="btn sm" data-dt="-1">−1</button>
+            <button class="btn sm" data-dt="1">+1</button>
+            <button class="btn sm" data-dt="10">+10</button>
+            <button class="btn sm" id="tempoReset" style="margin-left:auto">Réinitialiser</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Tonalité</h3>
+          <small>Tonalité d'origine : <b id="keyOrig"></b></small>
+          <div class="stepper">
+            <button class="btn round" id="trDown" aria-label="Baisser d'un demi-ton">−</button>
+            <div class="val"><b id="keyNew"></b><small id="trLbl"></small></div>
+            <button class="btn round" id="trUp" aria-label="Monter d'un demi-ton">+</button>
+          </div>
+          <div class="row">
+            <button class="btn sm" id="octDown">−1 octave</button>
+            <button class="btn sm" id="octUp">+1 octave</button>
+            <button class="btn sm" id="trReset" style="margin-left:auto">Réinitialiser</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Sauvegarder / exporter</h3>
+          <small>Titre</small>
+          <input type="text" id="titleIn" class="text-in" maxlength="80">
+          <div class="export-btns">
+            <button class="btn" id="expJson">💾 Projet (.json)</button>
+            <button class="btn" id="expWav">🎵 Audio (.wav)</button>
+          </div>
+          <small id="expStatus" style="display:block;margin-top:8px">Le projet contient les notes et tous les réglages : rouvre-le à l'étape 1 sans refaire l'analyse. L'audio reprend les réglages en cours.</small>
+        </div>
+      </aside>
+
+      <div class="card">
+        <div class="transport">
+          <button class="play" id="play" aria-label="Lecture">▶</button>
+          <button class="btn round" id="stop" aria-label="Stop">■</button>
+          <div class="prog-wrap">
+            <div class="prog" id="prog"><i id="progFill"></i></div>
+            <div class="prog-info"><span id="posLbl"></span><span id="timeLbl"></span></div>
+          </div>
+          <label class="chk"><input type="checkbox" id="loop"> Boucle</label>
+        </div>
+        <div class="paper" id="score"></div>
+        <div class="score-cap">Partition reconstruite à partir de l'analyse — les notes jouées s'illuminent. Clique sur la barre de progression pour te déplacer. Barre d'espace : lecture / pause. Les réglages s'appliquent en direct.</div>
+        <div class="row end" style="margin-top:12px">
+          <button class="btn" id="restart">Nouvelle partition</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// ---------- Modèle musical ----------
+const DEFAULT_TEMPO = 100, BEATS_PER_BAR = 4, BARS_PER_SYSTEM = 4;
+const KEYS = ['Do','Ré♭','Ré','Mi♭','Mi','Fa','Fa♯','Sol','La♭','La','Si♭','Si'];
+const KEY_CODES = ['C','Db','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const INSTRS = {piano:'Piano', flute:'Flûte', cordes:'Cordes', orgue:'Orgue'};
+const PALETTE = ['#4f46e5','#0e9f6e','#d9480f','#b5179e','#0284c7','#a16207'];
+const LETTER = {C:0,D:1,E:2,F:3,G:4,A:5,B:6};
+const SEMI = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+
+function mkNote(pitch, start, d){
+  const m = /^([A-G])([#b]?)(\d)$/.exec(String(pitch));
+  if (!m || !(d > 0) || !(start >= 0)) throw new Error(`Note invalide : ${JSON.stringify({pitch, start, duration:d})}`);
+  const [, l, acc, o] = m, oct = +o;
+  return {p:pitch, d, start, bar:Math.floor(start / BEATS_PER_BAR + 1e-9),
+          dia:oct*7 + LETTER[l], midi:(oct+1)*12 + SEMI[l] + (acc === '#' ? 1 : acc === 'b' ? -1 : 0)};
+}
+function parse(src){
+  const notes = []; let beat = 0;
+  src.split('|').forEach(bar => bar.trim().split(/\s+/).forEach(tok => {
+    const [p, d] = tok.split(':'); const dur = d ? parseFloat(d) : 1;
+    notes.push(mkNote(p, beat, dur)); beat += dur;
+  }));
+  return notes;
+}
+// Données simulées : ce que l'OMR renverrait pour la partition d'exemple
+function exampleParts(){
+  return [
+    {name:'Voix 1', short:'V1', role:'Mélodie', clef:'treble', color:PALETTE[0], instr:'piano', vol:.9, on:true,
+     notes:parse('E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | E4:1.5 D4:.5 D4:2 | E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | D4:1.5 C4:.5 C4:2')},
+    {name:'Voix 2', short:'V2', role:'Harmonie', clef:'treble', color:PALETTE[1], instr:'flute', vol:.6, on:true,
+     notes:parse('C4 C4 D4 E4 | E4 D4 C4 B3 | A3 A3 B3 C4 | C4:1.5 B3:.5 B3:2 | C4 C4 D4 E4 | E4 D4 C4 B3 | A3 A3 B3 C4 | B3:1.5 G3:.5 G3:2')},
+    {name:'Basse', short:'B.', role:'Accompagnement', clef:'bass', color:PALETTE[2], instr:'cordes', vol:.7, on:true,
+     notes:parse('C3:2 E3:2 | B2:2 G2:2 | C3:2 E3:2 | G2:2 B2:2 | C3:2 E3:2 | B2:2 G2:2 | A2:2 F2:2 | G2:2 C3:2')},
+  ];
+}
+const totalBeats = parts => {
+  const end = Math.max(BEATS_PER_BAR, ...parts.flatMap(p => p.notes.map(n => n.start + n.d)));
+  return Math.ceil(end / BEATS_PER_BAR - 1e-9) * BEATS_PER_BAR;
+};
+
+let PARTS = [], TOTAL = 32, BARS = 8;
+function setParts(parts){ PARTS = parts; TOTAL = totalBeats(parts); BARS = TOTAL / BEATS_PER_BAR; }
+
+const state = {pages:[], source:null, title:'', nPages:0, key:0, detectedTempo:null, tempo:DEFAULT_TEMPO, transpose:0, loop:false};
+
+// ---------- Rendu de partition (SVG) ----------
+function renderScore(parts, {prefix = '', title = '', tempo = null, systems = null} = {}){
+  const bars = totalBeats(parts) / BEATS_PER_BAR;
+  const sysList = systems ?? [...Array(Math.ceil(bars / BARS_PER_SYSTEM)).keys()];
+  const W = 1000, left = 110, right = 980, staffH = 40, staffStep = 95;
+  const sysH = (parts.length - 1) * staffStep + staffH, sysStep = sysH + 90;
+  const sys0 = title || tempo ? 100 : 50;
+  const H = sys0 + (sysList.length - 1) * sysStep + sysH + 40;
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Georgia,serif" stroke="currentColor" fill="currentColor">`;
+  if (title) s += `<text ${prefix?`id="${prefix}-title"`:''} x="${W/2}" y="42" text-anchor="middle" font-size="24" stroke="none">${esc(title)}</text>`;
+  if (tempo) s += `<text x="${left}" y="${sys0-28}" font-size="17" font-weight="bold" stroke="none">♩ = ${tempo}</text>`;
+  sysList.forEach((sy, k) => {
+    const top0 = sys0 + k * sysStep;
+    const cStart = left + (sy === 0 ? 85 : 55);
+    const barW = (right - cStart) / BARS_PER_SYSTEM;
+    const lastSys = sy === Math.ceil(bars / BARS_PER_SYSTEM) - 1;
+    s += `<line x1="${left}" y1="${top0}" x2="${left}" y2="${top0 + sysH}" stroke-width="2"/>`;
+    s += `<text x="${cStart+4}" y="${top0-8}" font-size="11" stroke="none" fill="#888">${sy*BARS_PER_SYSTEM+1}</text>`;
+    parts.forEach((p, pi) => {
+      const top = top0 + pi * staffStep, bottom = top + staffH, base = p.clef === 'bass' ? 18 : 30;
+      s += `<g class="pg-${pi}">`;
+      s += `<text x="${left-12}" y="${top+25}" text-anchor="end" font-size="13" stroke="none" font-family="system-ui,sans-serif">${esc(sy===0?p.name:p.short)}</text>`;
+      for (let i = 0; i < 5; i++) s += `<line x1="${left}" y1="${top+i*10}" x2="${right}" y2="${top+i*10}" stroke-width="1"/>`;
+      s += p.clef === 'bass'
+        ? `<text x="${left+6}" y="${top+30}" font-size="34" stroke="none" font-family="'Segoe UI Symbol','Noto Music',serif">𝄢</text>`
+        : `<text x="${left+4}" y="${top+34}" font-size="44" stroke="none" font-family="'Segoe UI Symbol','Noto Music',serif">𝄞</text>`;
+      if (sy === 0) s += `<text x="${left+58}" y="${top+19}" font-size="21" font-weight="bold" stroke="none" text-anchor="middle">4</text><text x="${left+58}" y="${top+39}" font-size="21" font-weight="bold" stroke="none" text-anchor="middle">4</text>`;
+      for (let b = 1; b <= BARS_PER_SYSTEM; b++){
+        const x = cStart + b * barW;
+        s += `<line x1="${x}" y1="${top}" x2="${x}" y2="${bottom}" stroke-width="${lastSys && b === BARS_PER_SYSTEM ? 4 : 1.2}"/>`;
+      }
+      p.notes.forEach((n, ni) => {
+        if (Math.floor(n.bar / BARS_PER_SYSTEM) !== sy) return;
+        const bx = cStart + (n.bar % BARS_PER_SYSTEM) * barW;
+        const x = bx + 24 + (n.start - n.bar * BEATS_PER_BAR) * (barW - 34) / BEATS_PER_BAR;
+        const y = bottom - (n.dia - base) * 5;
+        let g = `<g class="nt" ${prefix?`id="${prefix}-${pi}-${ni}"`:''} style="--c:${p.color}">`;
+        for (let l = base-2; l >= n.dia; l -= 2){ const ly = bottom-(l-base)*5; g += `<line x1="${x-10}" y1="${ly}" x2="${x+10}" y2="${ly}" stroke-width="1.2"/>`; }
+        for (let l = base+10; l <= n.dia; l += 2){ const ly = bottom-(l-base)*5; g += `<line x1="${x-10}" y1="${ly}" x2="${x+10}" y2="${ly}" stroke-width="1.2"/>`; }
+        const hollow = n.d >= 2;
+        g += `<ellipse cx="${x}" cy="${y}" rx="6.2" ry="4.4" transform="rotate(-20 ${x} ${y})" fill="${hollow?'none':'currentColor'}" stroke-width="${hollow?1.8:1}"/>`;
+        if (n.d < 4){
+          const up = n.dia < base + 4;
+          const sx = up ? x+5.8 : x-5.8, ey = up ? y-33 : y+33;
+          g += `<line x1="${sx}" y1="${y}" x2="${sx}" y2="${ey}" stroke-width="1.3"/>`;
+          if (n.d === .5) g += up ? `<path d="M${sx},${ey} c1,7 10,9 8,18" fill="none" stroke-width="1.8"/>` : `<path d="M${sx},${ey} c1,-7 10,-9 8,-18" fill="none" stroke-width="1.8"/>`;
+        }
+        if (n.d === 1.5 || n.d === 3) g += `<circle cx="${x+11}" cy="${(n.dia-base)%2===0 ? y-5 : y}" r="2" stroke="none"/>`;
+        s += g + `</g>`;
+      });
+      s += `</g>`;
+    });
+  });
+  return s + `</svg>`;
+}
+const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- Navigation ----------
+const $ = id => document.getElementById(id);
+let reached = 1;
+function go(n){
+  if (n !== 3) pause();
+  reached = Math.max(reached, n);
+  [1,2,3].forEach(i => $('s'+i).hidden = i !== n);
+  document.querySelectorAll('.step').forEach(el => {
+    const i = +el.dataset.s, skipped = i === 2 && state.source === 'project';
+    el.className = 'step' + (i === n ? ' cur' : i <= reached && !skipped ? ' done' : '');
+  });
+  window.scrollTo({top:0});
+}
+$('steps').addEventListener('click', e => {
+  const el = e.target.closest('.step.done'); if (el) go(+el.dataset.s);
+});
+
+// ---------- Étape 1 : pages ----------
+function setPages(pages){
+  state.pages = pages; reached = 1; hideErr();
+  $('pick').hidden = pages.length > 0; $('pagesBox').hidden = pages.length === 0;
+  $('pagesCount').textContent = `${pages.length} page${pages.length > 1 ? 's' : ''} — dans l'ordre de lecture`;
+  $('analyze').textContent = `Analyser ${pages.length > 1 ? `les ${pages.length} pages` : 'la page'} →`;
+  const ex = exampleParts();
+  $('pages').innerHTML = pages.map((p, i) => `
+    <div class="pg">
+      <div class="thumb paper">${p.kind === 'example'
+        ? renderScore(ex, {title: p.sys === 0 ? 'Ode à la joie' : '', tempo: p.sys === 0 ? 96 : null, systems:[p.sys]})
+        : `<img src="${p.url}" alt="Page ${i+1}">`}</div>
+      <div class="pg-bar">
+        <b>${i+1}</b><span class="name" title="${esc(p.name)}">${esc(p.name)}</span>
+        <button class="btn icon" data-act="up" data-i="${i}" ${i===0?'disabled':''} aria-label="Monter">↑</button>
+        <button class="btn icon" data-act="down" data-i="${i}" ${i===pages.length-1?'disabled':''} aria-label="Descendre">↓</button>
+        <button class="btn icon" data-act="del" data-i="${i}" aria-label="Retirer">✕</button>
+      </div>
+    </div>`).join('') + `
+    <label class="pg add"><input type="file" class="fileIn" accept="image/*" multiple hidden><span>+</span>Ajouter des pages</label>`;
+}
+$('pages').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const i = +b.dataset.i, p = [...state.pages];
+  if (b.dataset.act === 'del') p.splice(i, 1);
+  else { const j = b.dataset.act === 'up' ? i-1 : i+1; [p[i], p[j]] = [p[j], p[i]]; }
+  setPages(p);
+});
+function addFiles(files){
+  const imgs = [...files].filter(f => f.type.startsWith('image/'));
+  if (!imgs.length) return;
+  Promise.all(imgs.map(f => new Promise(res => {
+    const r = new FileReader(); r.onload = () => res({kind:'img', url:r.result, name:f.name}); r.readAsDataURL(f);
+  }))).then(added => setPages([...state.pages, ...added]));
+}
+document.addEventListener('change', e => {
+  if (e.target.classList.contains('fileIn')){ addFiles(e.target.files); e.target.value = ''; }
+  if (e.target.id === 'projIn' || e.target.classList.contains('projIn2')){ openProject(e.target.files[0]); e.target.value = ''; }
+});
+const card1 = $('s1card');
+['dragover','dragenter'].forEach(ev => card1.addEventListener(ev, e => { e.preventDefault(); card1.classList.add('over'); }));
+card1.addEventListener('dragleave', e => { if (!card1.contains(e.relatedTarget)) card1.classList.remove('over'); });
+card1.addEventListener('drop', e => {
+  e.preventDefault(); card1.classList.remove('over');
+  const fs = [...e.dataTransfer.files];
+  const json = fs.find(f => f.name.endsWith('.json'));
+  json ? openProject(json) : addFiles(fs);
+});
+$('useExample').onclick = () => setPages([
+  {kind:'example', sys:0, name:'ode-a-la-joie-p1.png'},
+  {kind:'example', sys:1, name:'ode-a-la-joie-p2.png'},
+]);
+$('clearPages').onclick = () => setPages([]);
+$('analyze').onclick = runAnalysis;
+function showErr(msg){ $('loadErr').textContent = msg; $('loadErr').hidden = false; }
+function hideErr(){ $('loadErr').hidden = true; }
+
+// ---------- Ouverture d'un projet JSON ----------
+function openProject(file){
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try { applyProject(JSON.parse(r.result)); }
+    catch (err){ showErr(err instanceof SyntaxError ? 'Ce fichier n\'est pas un JSON valide.' : err.message); }
+  };
+  r.readAsText(file);
+}
+function applyProject(d){
+  if (!d || d.format !== 'music-reader') throw new Error('Ce fichier n\'est pas un projet Music Reader.');
+  if (d.version !== 1) throw new Error(`Version de projet non prise en charge (${d.version}).`);
+  if (!Array.isArray(d.parts) || !d.parts.length) throw new Error('Le projet ne contient aucune ligne musicale.');
+  const parts = d.parts.map((p, i) => {
+    if (!Array.isArray(p.notes)) throw new Error(`La ligne ${i+1} ne contient pas de notes.`);
+    const vol = Number(p.volume);
+    return {
+      name: String(p.name || `Ligne ${i+1}`), short: String(p.short || `L${i+1}`), role: String(p.role || ''),
+      clef: p.clef === 'bass' ? 'bass' : 'treble', color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : PALETTE[i % PALETTE.length],
+      instr: INSTRS[p.instrument] ? p.instrument : 'piano', vol: Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : .8,
+      on: p.enabled !== false, notes: p.notes.map(n => mkNote(n.pitch, Number(n.start), Number(n.duration))),
+    };
+  });
+  const s = d.settings || {}, sc = d.score || {};
+  setParts(parts);
+  state.source = 'project';
+  state.title = String(d.title || 'Sans titre');
+  state.nPages = Number(sc.pages) || 0;
+  state.key = Math.max(0, KEY_CODES.indexOf(sc.key));
+  state.detectedTempo = Number(sc.detectedTempo) || null;
+  state.tempo = clampTempo(Number(s.tempo) || state.detectedTempo || DEFAULT_TEMPO);
+  state.transpose = Math.max(-12, Math.min(12, Math.round(Number(s.transpose) || 0)));
+  state.loop = !!s.loop;
+  hideErr();
+  setupPlayer();
+  $('projNote').textContent = `Projet « ${state.title} » chargé — notes et réglages restaurés${d.createdAt ? ` (sauvegardé le ${new Date(d.createdAt).toLocaleString('fr-FR')})` : ''}.`;
+  $('projNote').hidden = false;
+  reached = 3; go(3);
+}
+
+// ---------- Étape 2 : analyse (simulée) ----------
+let runId = 0;
+function runAnalysis(){
+  const id = ++runId;
+  state.source = state.pages.every(p => p.kind === 'example') ? 'example' : 'upload';
+  reached = 2; go(2);
+  $('s2title').textContent = 'Analyse en cours…';
+  $('summary').hidden = true;
+  const n = state.pages.length;
+  const stages = [
+    ...state.pages.map((_, i) => `Page ${i+1}/${n} : détection des portées et reconnaissance des symboles`),
+    ...(n > 1 ? [`Assemblage des ${n} pages (raccord des lignes)`] : []),
+    'Lecture de l\'armure, de la mesure et du tempo',
+    'Construction du modèle musical',
+  ];
+  $('stages').innerHTML = stages.map(t => `<li><span class="st">○</span>${t}</li>`).join('');
+  const lis = [...$('stages').children];
+  let i = 0;
+  (function next(){
+    if (id !== runId || $('s2').hidden) return;
+    if (i > 0){ lis[i-1].className = 'ok'; lis[i-1].firstChild.innerHTML = '<span style="color:var(--ok)">✓</span>'; }
+    if (i === lis.length) return finishAnalysis();
+    lis[i].className = 'run'; lis[i].firstChild.innerHTML = '<span class="spin"></span>';
+    i++; setTimeout(next, 400 + Math.random()*350);
+  })();
+}
+function finishAnalysis(){
+  setParts(exampleParts());
+  const ex = state.source === 'example';
+  state.title = ex ? 'Ode à la joie' : 'Partition importée';
+  state.nPages = state.pages.length;
+  state.key = 0;
+  state.detectedTempo = ex ? 96 : null;
+  state.tempo = state.detectedTempo ?? DEFAULT_TEMPO;
+  state.transpose = 0; state.loop = false;
+  $('s2title').textContent = 'Analyse terminée';
+  $('facts').innerHTML = [
+    ['Pages', state.nPages],
+    ['Lignes détectées', `${PARTS.length} (${PARTS.map(p => p.name).join(', ')})`],
+    ['Mesures', `${BARS} · ${Math.ceil(BARS / BARS_PER_SYSTEM)} systèmes`],
+    ['Mesure', '4/4'],
+    ['Tonalité', KEYS[state.key] + ' majeur'],
+    ['Tempo', state.detectedTempo ? `♩ = ${state.detectedTempo}` : 'non indiqué'],
+  ].map(([k, v]) => `<div class="fact"><small>${k}</small><b>${v}</b></div>`).join('');
+  $('tempoNote').innerHTML = state.detectedTempo
+    ? `<div class="note info">Tempo lu sur la partition : ♩ = ${state.detectedTempo}. Il reste modifiable à l'étape suivante.</div>`
+    : `<div class="note warn">Aucun tempo indiqué sur la partition → tempo par défaut de <b>${DEFAULT_TEMPO} BPM</b> appliqué, modifiable à l'étape suivante.</div>`;
+  $('simNote').hidden = ex;
+  $('summary').hidden = false;
+}
+$('back1').onclick = () => go(1);
+$('toPlay').onclick = () => { $('projNote').hidden = true; setupPlayer(); go(3); };
+
+// ---------- Étape 3 : réglages ----------
+let noteEls = [];
+function setupPlayer(){
+  stop();
+  $('score').innerHTML = renderScore(PARTS, {prefix:'n', title:state.title, tempo:state.detectedTempo});
+  noteEls = PARTS.map((p, pi) => p.notes.map((_, ni) => $(`n-${pi}-${ni}`)));
+  $('parts').innerHTML = PARTS.map((p, i) => `
+    <div class="part" data-i="${i}">
+      <label class="part-head">
+        <input type="checkbox" data-k="on">
+        <span class="sw" style="background:${p.color}"></span>
+        <span class="lbl"><b>${esc(p.name)}</b><small>${p.clef === 'bass' ? 'Clé de fa' : 'Clé de sol'}${p.role ? ' · ' + esc(p.role) : ''}</small></span>
+        <button class="btn sm" data-k="solo" type="button">Solo</button>
+      </label>
+      <div class="part-ctrl">
+        <select data-k="instr" aria-label="Instrument">${Object.entries(INSTRS).map(([k, v]) => `<option value="${k}" ${k === p.instr ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <span title="Volume">🔊</span><input type="range" min="0" max="1" step=".05" value="${p.vol}" data-k="vol" aria-label="Volume">
+      </div>
+    </div>`).join('');
+  $('tempoBadge').className = 'badge ' + (state.detectedTempo ? 'ok' : 'warn');
+  $('tempoBadge').textContent = state.detectedTempo ? `lu sur la partition (${state.detectedTempo})` : 'par défaut';
+  $('keyOrig').textContent = KEYS[state.key] + ' majeur';
+  $('titleIn').value = state.title;
+  $('loop').checked = state.loop;
+  refreshParts(); refreshTempo(); refreshKey(); updateUI(0);
+}
+function refreshParts(){
+  document.querySelectorAll('.part').forEach(el => {
+    const p = PARTS[+el.dataset.i];
+    el.classList.toggle('off', !p.on);
+    el.querySelector('[data-k=on]').checked = p.on;
+  });
+  const svg = $('score').querySelector('svg');
+  PARTS.forEach((p, i) => svg.classList.toggle('off-' + i, !p.on));
+  const any = PARTS.some(p => p.on);
+  $('play').disabled = !any; $('expWav').disabled = !any;
+  if (!any) pause();
+}
+$('parts').addEventListener('click', e => {
+  const b = e.target.closest('[data-k=solo]'); if (!b) return;
+  e.preventDefault();
+  const i = +b.closest('.part').dataset.i;
+  PARTS.forEach((p, j) => p.on = j === i);
+  refreshParts(); restartIfPlaying();
+});
+$('parts').addEventListener('input', e => {
+  const k = e.target.dataset.k, p = PARTS[+e.target.closest('.part').dataset.i];
+  if (k === 'on'){ p.on = e.target.checked; refreshParts(); restartIfPlaying(); }
+  if (k === 'instr'){ p.instr = e.target.value; restartIfPlaying(); }
+  if (k === 'vol'){ p.vol = +e.target.value; debouncedRestart(); }
+});
+$('allOn').onclick = () => { PARTS.forEach(p => p.on = true); refreshParts(); restartIfPlaying(); };
+$('allOff').onclick = () => { PARTS.forEach(p => p.on = false); refreshParts(); };
+
+const clampTempo = v => Math.max(30, Math.min(240, Math.round(v) || DEFAULT_TEMPO));
+function setTempo(v){ state.tempo = clampTempo(v); refreshTempo(); debouncedRestart(); }
+function refreshTempo(){ $('tempoNum').value = state.tempo; $('tempoRange').value = state.tempo; updateUI(curBeat()); }
+$('tempoRange').oninput = e => setTempo(+e.target.value);
+$('tempoNum').onchange = e => setTempo(+e.target.value);
+document.querySelectorAll('[data-dt]').forEach(b => b.onclick = () => setTempo(state.tempo + +b.dataset.dt));
+$('tempoReset').onclick = () => setTempo(state.detectedTempo ?? DEFAULT_TEMPO);
+
+function setTranspose(v){ state.transpose = Math.max(-12, Math.min(12, v)); refreshKey(); restartIfPlaying(); }
+function refreshKey(){
+  const t = state.transpose, n = Math.abs(t);
+  $('keyNew').textContent = KEYS[(((state.key + t) % 12) + 12) % 12] + ' majeur';
+  $('trLbl').textContent = t === 0 ? 'tonalité d\'origine'
+    : `${t > 0 ? '+' : '−'}${n} demi-ton${n > 1 ? 's' : ''} · ${n === 12 ? 'une octave ' : ''}${t > 0 ? 'plus haut' : 'plus bas'}`;
+  $('trDown').disabled = t <= -12; $('trUp').disabled = t >= 12;
+}
+$('trDown').onclick = () => setTranspose(state.transpose - 1);
+$('trUp').onclick = () => setTranspose(state.transpose + 1);
+$('octDown').onclick = () => setTranspose(state.transpose - 12);
+$('octUp').onclick = () => setTranspose(state.transpose + 12);
+$('trReset').onclick = () => setTranspose(0);
+$('loop').onchange = e => state.loop = e.target.checked;
+$('titleIn').oninput = e => {
+  state.title = e.target.value;
+  const t = $('n-title'); if (t) t.textContent = state.title;
+};
+$('restart').onclick = () => { stop(); state.source = null; setPages([]); go(1); };
+
+// ---------- Moteur audio (Web Audio, temps réel et hors ligne) ----------
+let ctx = null, master = null, playing = false, t0 = 0, beat0 = 0, sp0 = .6, pausedBeat = 0, raf = 0, debT = 0;
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+function curBeat(){ return playing ? beat0 + (ctx.currentTime - t0) / sp0 : pausedBeat; }
+
+function env(g, t, dur, peak, a, s, r){
+  g.setValueAtTime(0, t);
+  g.linearRampToValueAtTime(peak, t + a);
+  g.linearRampToValueAtTime(peak * s, t + Math.min(dur, a + .1));
+  g.setValueAtTime(peak * s, t + dur);
+  g.linearRampToValueAtTime(0, t + dur + r);
+  return t + dur + r + .02;
+}
+function voice(ac, dest, instr, f, t, dur, vol){
+  const out = ac.createGain(); out.connect(dest);
+  const g = out.gain, peak = .18 * vol, oscs = [];
+  const mk = (type, freq, gain, to) => {
+    const o = ac.createOscillator(); o.type = type; o.frequency.value = freq;
+    const gg = ac.createGain(); gg.gain.value = gain; o.connect(gg); gg.connect(to); oscs.push(o);
+  };
+  const lp = cut => { const b = ac.createBiquadFilter(); b.type = 'lowpass'; b.frequency.value = cut; b.connect(out); return b; };
+  let end;
+  if (instr === 'piano'){
+    mk('triangle', f, 1, out); mk('sine', f*2, .25, out);
+    g.setValueAtTime(0, t); g.linearRampToValueAtTime(peak*1.4, t + .006);
+    g.exponentialRampToValueAtTime(.0004, t + dur + .45); end = t + dur + .5;
+  } else if (instr === 'orgue'){
+    const b = lp(2400); mk('square', f, .45, b); mk('sine', f/2, .6, b);
+    end = env(g, t, dur, peak*.9, .02, 1, .06);
+  } else if (instr === 'flute'){
+    mk('sine', f, 1, out); mk('sine', f*2, .07, out);
+    end = env(g, t, dur, peak*1.3, .06, .85, .12);
+  } else {
+    const b = lp(1500); mk('sawtooth', f, .5, b); mk('sawtooth', f*1.005, .5, b);
+    end = env(g, t, dur, peak*.9, .09, .8, .25);
+  }
+  oscs.forEach(o => { o.start(t); o.stop(end); });
+}
+function makeMaster(ac){
+  const m = ac.createGain(); m.gain.value = .9;
+  const comp = ac.createDynamicsCompressor(); m.connect(comp); comp.connect(ac.destination);
+  return m;
+}
+function schedule(ac, dest, fromBeat, start, sp){
+  PARTS.forEach(p => {
+    if (!p.on) return;
+    p.notes.forEach(n => {
+      if (n.start < fromBeat - 1e-6) return;
+      voice(ac, dest, p.instr, hz(n.midi + state.transpose), start + (n.start - fromBeat) * sp, n.d * sp * .92, p.vol);
+    });
+  });
+}
+function start(fromBeat){
+  if (!PARTS.some(p => p.on)) return;
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  ctx.resume();
+  master = makeMaster(ctx);
+  sp0 = 60 / state.tempo; t0 = ctx.currentTime + .06; beat0 = fromBeat; playing = true;
+  schedule(ctx, master, fromBeat, t0, sp0);
+  $('play').textContent = '❚❚'; $('play').setAttribute('aria-label', 'Pause');
+  cancelAnimationFrame(raf); tick();
+}
+function stopAudio(){
+  if (master){ const m = master; m.gain.setTargetAtTime(0, ctx.currentTime, .015); setTimeout(() => m.disconnect(), 120); master = null; }
+  playing = false; cancelAnimationFrame(raf);
+  $('play').textContent = '▶'; $('play').setAttribute('aria-label', 'Lecture');
+}
+function pause(){ if (!playing) return; pausedBeat = curBeat(); stopAudio(); }
+function stop(){ stopAudio(); pausedBeat = 0; updateUI(0); }
+function restartIfPlaying(){ if (playing){ const b = curBeat(); stopAudio(); start(b); } }
+function debouncedRestart(){ clearTimeout(debT); debT = setTimeout(restartIfPlaying, 150); }
+function tick(){
+  const b = curBeat();
+  if (b >= TOTAL){
+    if (state.loop){ stopAudio(); start(0); return; }
+    stop(); return;
+  }
+  updateUI(b); raf = requestAnimationFrame(tick);
+}
+const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+function updateUI(b){
+  const sp = 60 / state.tempo;
+  $('progFill').style.width = (b / TOTAL * 100) + '%';
+  $('posLbl').textContent = `Mesure ${Math.min(BARS, Math.floor(b / BEATS_PER_BAR) + 1)} / ${BARS}`;
+  $('timeLbl').textContent = `${fmt(b * sp)} / ${fmt(TOTAL * sp)}`;
+  PARTS.forEach((p, pi) => p.notes.forEach((n, ni) => {
+    const el = noteEls[pi] && noteEls[pi][ni]; if (!el) return;
+    const on = playing && p.on && b >= n.start && b < n.start + n.d;
+    if (el._on !== on){ el._on = on; el.classList.toggle('on', on); }
+  }));
+}
+$('play').onclick = () => playing ? pause() : start(pausedBeat >= TOTAL ? 0 : pausedBeat);
+$('stop').onclick = stop;
+$('prog').onclick = e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  const b = Math.max(0, Math.min(TOTAL - .01, (e.clientX - r.left) / r.width * TOTAL));
+  if (playing){ stopAudio(); start(b); } else { pausedBeat = b; updateUI(b); }
+};
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || $('s3').hidden) return;
+  if (['INPUT','SELECT','TEXTAREA','BUTTON'].includes(e.target.tagName)) return;
+  e.preventDefault(); $('play').click();
+});
+
+// ---------- Export ----------
+const slug = t => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'partition';
+async function saveFile(blob, name){
+  const file = new File([blob], name, {type: blob.type});
+  if (matchMedia('(pointer:coarse)').matches && navigator.canShare && navigator.canShare({files:[file]})){
+    try { await navigator.share({files:[file], title:name}); return; }
+    catch (e){ if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function status(msg){ $('expStatus').textContent = msg; }
+
+$('expJson').onclick = () => {
+  const data = {
+    format: 'music-reader', version: 1,
+    title: state.title, createdAt: new Date().toISOString(),
+    score: {pages: state.nPages, timeSignature: [4, 4], key: KEY_CODES[state.key], detectedTempo: state.detectedTempo},
+    settings: {tempo: state.tempo, transpose: state.transpose, loop: state.loop},
+    parts: PARTS.map(p => ({
+      name: p.name, short: p.short, role: p.role, clef: p.clef, color: p.color,
+      enabled: p.on, instrument: p.instr, volume: p.vol,
+      notes: p.notes.map(n => ({pitch: n.p, start: n.start, duration: n.d})),
+    })),
+  };
+  const name = `${slug(state.title)}.music-reader.json`;
+  saveFile(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}), name);
+  status(`Projet exporté : ${name}`);
+};
+
+function toWav(buf){
+  const len = buf.length, sr = buf.sampleRate, ch = buf.getChannelData(0);
+  const v = new DataView(new ArrayBuffer(44 + len * 2));
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + len * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, len * 2, true);
+  for (let i = 0, o = 44; i < len; i++, o += 2){
+    const s = Math.max(-1, Math.min(1, ch[i]));
+    v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([v], {type:'audio/wav'});
+}
+$('expWav').onclick = async () => {
+  const btn = $('expWav'); btn.disabled = true; btn.textContent = '⏳ Génération…';
+  try {
+    const sp = 60 / state.tempo, sr = 44100;
+    const oac = new OfflineAudioContext(1, Math.ceil(sr * (TOTAL * sp + 1.5)), sr);
+    schedule(oac, makeMaster(oac), 0, .05, sp);
+    const blob = toWav(await oac.startRendering());
+    const t = state.transpose;
+    const name = `${slug(state.title)}${t ? `_${t > 0 ? '+' : ''}${t}` : ''}_${state.tempo}bpm.wav`;
+    await saveFile(blob, name);
+    status(`Audio exporté : ${name} (${(blob.size / 1e6).toFixed(1)} Mo)`);
+  } catch (e){
+    status('Échec de l\'export audio : ' + e.message);
+  } finally {
+    btn.textContent = '🎵 Audio (.wav)'; btn.disabled = !PARTS.some(p => p.on);
+  }
+};
+</script>
+</body>
+</html>
