@@ -138,6 +138,8 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 - **Décision** : le serveur sera en **Node.js** (et non FastAPI) — une seule stack JS, la lecture du MusicXML est déjà faite côté JS dans la v0.
 - **Décision** : **une image = une page**, le découpage se fait au scan. Détecter la gouttière automatiquement coûterait plus cher que le problème qu'il résout.
 - **Décision** : **le tempo n'est pas analysé** — 100 BPM au départ, réglés à l'oreille. L'effort porte sur les hauteurs et les durées.
+- **Les rondes étaient toutes perdues, et la police de référence en était la cause.** Audiveris compare les têtes de notes aux gabarits d'une police ; celle qu'il utilise par défaut (Bravura) ne convenait à aucune des deux partitions testées — zéro ronde reconnue de part et d'autre, sans le moindre avertissement. `Leland` en retrouve 15 sur la gravure classique **et** fait tomber les mesures fausses de 5 à 3 ; `FinaleJazz`, sur la grille calligraphiée, retrouve en plus les barres de mesure (42 mesures détectées au lieu de 31, pour 44 réelles). **Aucune police ne gagne partout. Décision** : `Leland` par défaut, et le choix de la police se fait **page par page** dans l'interface.
+- Ce que cet épisode apprend sur la suite : une figure entière peut disparaître sans qu'Audiveris signale quoi que ce soit, et seul le contrôle des durées l'a révélé. La **correction manuelle** (§7) n'est donc pas un confort, c'est le filet de sécurité du projet.
 
 ## 7. Hors V1 (pistes V2)
 
@@ -145,9 +147,41 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 - Découpage automatique des scans contenant deux pages en vis-à-vis.
 - Lecture automatique du tempo (indication métronomique, ou en toutes lettres via OCR).
 - Export MIDI / MP3.
-- Correction manuelle des notes mal reconnues.
-- Affichage de la partition transposée.
+- **Correction manuelle des notes** — voir ci-dessous.
+- **Correction manuelle des paroles** — voir ci-dessous.
+- **Réimpression de la partition** — voir ci-dessous.
 - Recadrage/redressement des photos.
+
+### Correction manuelle des notes
+
+Quand la reconnaissance se trompe sur une ou deux notes seulement, relancer l'analyse ne sert à rien : il faut pouvoir corriger à la main. Deux gestes suffisent :
+
+1. **Placer la note** — cliquer sur la portée reconstruite à l'endroit voulu. La hauteur se déduit de la ligne ou de l'interligne visé, aimantée au degré le plus proche, et s'affiche pendant le geste pour confirmation.
+2. **Choisir la figure** — une palette de durées montrées en **symboles** (ronde, blanche, noire, croche, double, plus le point) plutôt que nommées.
+
+Les mêmes gestes servent à **modifier** une note mal lue (déplacer sa tête, changer sa figure) et à en **supprimer** une de trop.
+
+Deux raccords avec le reste du projet :
+
+- Le contrôle des durées de la V1 **désigne déjà les mesures à reprendre** : la correction s'applique en priorité là où il signale un total faux ou une mesure vide. L'un ne vaut pas grand-chose sans l'autre.
+- Une note posée à la main est **marquée comme telle** et conservée dans le fichier projet, pour qu'une réanalyse de la page ne l'efface pas en silence.
+
+### Correction manuelle des paroles
+
+L'OCR des paroles est le maillon le plus fragile de la chaîne : sur les essais, les syllabes ressortent souvent déformées (« Là - haut » lu « Lia - hunt »). Elles doivent donc être **éditables**, syllabe par syllabe, sous la note à laquelle elles sont rattachées. Comme pour les notes, une paroles corrigée à la main est conservée dans le fichier projet et survit à une réanalyse.
+
+Les paroles n'entrent pas dans la synthèse : leur qualité n'empêche jamais d'écouter. Elles ne comptent que pour la relecture et pour l'impression.
+
+### Réimprimer la partition
+
+Une fois la partition relue, corrigée et réglée, on doit pouvoir **la ressortir propre** — pour la jouer, l'archiver ou la donner. L'impression (ou l'export PDF) reprend l'état courant du projet :
+
+- **les seules lignes sélectionnées** — n'extraire que la partie de voix, par exemple ;
+- **la tonalité choisie**, transposition appliquée aux notes *et* à l'armure ;
+- **les corrections manuelles**, de notes comme de paroles ;
+- **les paroles au choix**, avec ou sans.
+
+Un point à ne pas oublier : l'impression se fait **sans les couleurs de diagnostic** (orange et rouge). Elles servent à la relecture, pas à la partition finale — et une partition où subsistent des mesures douteuses doit malgré tout pouvoir s'imprimer proprement.
 
 ## 8. Risques
 

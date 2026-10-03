@@ -16,7 +16,7 @@ Page simple pour vérifier, sur de vraies partitions, si la reconnaissance d'Aud
 
 Hors périmètre : reprises / D.C. / coda, nuances, PDF, interface mobile soignée.
 
-## Deux partis pris
+## Trois partis pris
 
 **Une image = une page.** Audiveris cherche les systèmes sur toute la largeur de l'image. Un scan de recueil
 où deux pages se font face est donc mélangé : sur « Over The Rainbow » (3508×2480), il a reconstruit 17 systèmes
@@ -28,6 +28,13 @@ image est plus large que haute.
 **Le tempo n'est pas analysé.** La lecture démarre toujours à 100 BPM et se règle à l'oreille. Ce qui compte
 ici, c'est que les **hauteurs** et les **durées** soient justes : un tempo approximatif se corrige d'un curseur,
 une croche lue comme une noire, non.
+
+**La police de référence se choisit par page.** Audiveris reconnaît les têtes de notes en les comparant aux
+gabarits d'une police, et il en embarque six. Celle qu'il utilise par défaut (Bravura) ne convenait à **aucune**
+des deux partitions testées : pas une seule ronde reconnue sur l'une comme sur l'autre, sans le moindre
+avertissement. `Leland` les retrouve sur une gravure classique, `FinaleJazz` sur une grille
+calligraphiée — et y récupère en prime les barres de mesure. Aucune ne gagne partout : la v0 part sur
+`Leland` et laisse changer de police page par page, puis relancer. Voir « Le cas des rondes ».
 
 ## Installation (Windows)
 
@@ -49,6 +56,8 @@ Variables d'environnement facultatives :
 | `HOST` | interface d'écoute (`0.0.0.0` pour tester depuis un téléphone du réseau local) | `127.0.0.1` |
 | `AUDIVERIS_CMD` | chemin d'un Audiveris déjà installé (Windows, Linux…) | `tools\audiveris\…` |
 | `TESSDATA_PREFIX` | dossier des modèles OCR | `tools\tessdata` |
+| `MUSIC_FONT` | police de référence des têtes de notes : `Leland`, `Bravura`, `FinaleJazz`, `Primus`, `MusicalSymbols`, `JazzPerc` (aussi réglable page par page dans l'interface) | `Leland` |
+| `STEM_LESS_BOOST` | bonus Audiveris pour les têtes sans hampe ; sans effet si la police est la bonne, nuisible au-delà de 0,5 | vide |
 
 ## Fonctionnement
 
@@ -76,3 +85,33 @@ server.mjs (Node, sans dépendance)
 
 Les images trouvées sur internet sont souvent en basse résolution : l'agrandissement automatique est indispensable.
 Et un scan de deux pages doit être coupé en deux avant d'être envoyé.
+
+### Le cas des rondes
+
+Mesuré sur les deux partitions. « mes. » = mesures détectées, « faux » = mesures dont les durées ne
+retombent pas sur la métrique.
+
+| | rondes | blanches | noires | croches | notes | mes. | faux |
+|---|---|---|---|---|---|---|---|
+| Rainbow p1 — Bravura (défaut Audiveris) | **0** | 83 | 115 | 53 | 240 | 17 | 5 |
+| Rainbow p1 — Bravura + boost 0,5 | 13 | 83 | 115 | 53 | 253 | 17 | 5 |
+| Rainbow p1 — Bravura + boost 2,0 | 20 | 82 | 116 | 41 | 248 | 17 | 9 |
+| Rainbow p1 — **Leland** | **15** | 87 | 115 | 53 | **259** | 17 | **3** |
+| Rainbow p1 — Primus | 13 | 88 | 116 | 53 | 259 | 17 | 3 |
+| Fly Me — Bravura (défaut Audiveris) | **0** | 82 | 75 | 17 | 170 | 31 | 22 |
+| Fly Me — Bravura + boost 0,5 | 12 | 82 | 74 | 17 | 182 | 31 | 20 |
+| Fly Me — Leland | 3 | 22 | 82 | 21 | 123 | 39 | 18 |
+| Fly Me — **FinaleJazz** | 6 | 17 | 86 | 20 | 125 | **42** | **17** |
+
+Deux enseignements :
+
+- **La police compte bien plus que les seuils.** Sur Rainbow, Leland retrouve 15 rondes *et* fait tomber les
+  mesures fausses de 5 à 3, là où le bonus sans-hampe en récupérait 13 sans rien améliorer (il réparait la
+  mesure 4 mais en cassait une autre). Au-delà de 0,5, le bonus relit en rondes des notes qui ont bel et bien
+  une hampe : les croches passent de 53 à 41.
+- **Sur une partition calligraphiée, la police corrige aussi la structure.** Avec Bravura, Fly Me donnait
+  31 mesures pour 44 réelles, certaines cumulant 14 temps ; avec FinaleJazz, 42 mesures, et la première
+  mesure se lit exactement juste.
+
+Desserrer les seuils de correspondance des gabarits (`Template.maxDistanceLow/High`) **fait planter
+Audiveris** à l'étape STEMS (`Comparison method violates its general contract`) : piste à écarter.

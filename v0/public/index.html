@@ -119,6 +119,16 @@ textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace
           <option value="3">×3</option>
         </select>
       </label>
+      <label>Police des têtes
+        <select id="fontSel">
+          <option value="Leland" selected>Leland — gravure classique</option>
+          <option value="Bravura">Bravura — défaut d'Audiveris</option>
+          <option value="FinaleJazz">Finale Jazz — partitions calligraphiées</option>
+          <option value="Primus">Primus</option>
+          <option value="MusicalSymbols">Musical Symbols</option>
+          <option value="JazzPerc">Jazz Perc</option>
+        </select>
+      </label>
       <span class="spacer"></span>
       <button class="btn" id="clearBtn">Tout retirer</button>
       <button class="btn primary" id="runBtn" disabled>Analyser</button>
@@ -129,6 +139,7 @@ textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace
   <section class="card" id="resCard" hidden>
     <h2>2. Résultats par page</h2>
     <small>À gauche l'image envoyée, à droite la partition reconstruite à partir du MusicXML d'Audiveris. Compare-les et note chaque page.</small>
+    <label class="row" style="gap:6px;font-size:14px;margin-top:6px"><input type="checkbox" id="keepLayout" checked> Garder la mise en page d'origine (même découpage en systèmes que l'image)</label>
     <div id="results"></div>
   </section>
 
@@ -192,6 +203,9 @@ const DEFAULT_TEMPO = 100;
 const PALETTE = ['#4f46e5','#0e9f6e','#d9480f','#b5179e','#0284c7','#a16207','#64748b','#dc2626'];
 const INSTRS = {piano:'Piano', flute:'Flûte', cordes:'Cordes', orgue:'Orgue'};
 const VERDICTS = {ok:'✅ Bon', minor:'⚠️ Erreurs mineures', bad:'❌ Inutilisable'};
+// Familles de gabarits proposées par Audiveris. Celle qui convient dépend de la gravure :
+// aucune ne gagne partout, d'où le choix par page et la colonne « Police » dans le bilan.
+const FONTS = ['Leland', 'Bravura', 'FinaleJazz', 'Primus', 'MusicalSymbols', 'JazzPerc'];
 
 // ---------- État ----------
 let pages = [];   // {uid, file, name, url, w, h, status, job, scale, retried, error, scores:[{xml, parsed}], verdict, comment}
@@ -263,10 +277,10 @@ const drop = $('drop');
 drop.addEventListener('drop', e => { e.preventDefault(); addFiles(e.dataTransfer.files); });
 $('clearBtn').onclick = () => { stop(); pages.forEach(p => URL.revokeObjectURL(p.url)); pages = []; renderList(); rebuild(); renderResults(); };
 $('runBtn').onclick = () => {
-  const sel = $('scaleSel').value;
+  const sel = $('scaleSel').value, font = $('fontSel').value;
   pages.filter(p => p.status === 'pending' || p.status === 'error').forEach(p => {
     p.retried = false;
-    analyze(p, sel === 'auto' ? 1 : +sel, sel === 'auto');
+    analyze(p, sel === 'auto' ? 1 : +sel, sel === 'auto', font);
   });
 };
 
@@ -281,12 +295,14 @@ async function scaleImage(file, f){
   g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height);
   return new Promise(res => c.toBlob(res, 'image/png'));
 }
-async function analyze(p, scale, auto){
-  p.status = 'upload'; p.scale = scale; p.error = ''; p.scores = []; p.job = null;
+async function analyze(p, scale, auto, font){
+  p.status = 'upload'; p.scale = scale; p.font = font || p.font || $('fontSel').value;
+  p.error = ''; p.scores = []; p.job = null;
   renderList(); rebuild(); renderResults();
   try {
     const blob = await scaleImage(p.file, scale);
-    const r = await fetch('/api/jobs?name=' + encodeURIComponent(p.name), {method: 'POST', body: blob, headers: {'Content-Type': blob.type || 'application/octet-stream'}});
+    const r = await fetch(`/api/jobs?name=${encodeURIComponent(p.name)}&font=${encodeURIComponent(p.font)}`,
+                          {method: 'POST', body: blob, headers: {'Content-Type': blob.type || 'application/octet-stream'}});
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.statusText);
     p.job = j; p.status = j.status;
@@ -304,7 +320,7 @@ async function analyze(p, scale, auto){
       if (auto && !p.retried && p.job.interlineTooLow && p.job.interline){
         const f = Math.min(4, Math.max(1.5, Math.round(22 / p.job.interline * 2) / 2)) * scale;
         p.retried = {from: p.job.interline, factor: f};
-        return analyze(p, f, true);
+        return analyze(p, f, true, p.font);
       }
       throw new Error(p.job.error || 'échec');
     }
@@ -330,11 +346,13 @@ function renderResults(){
         ${p.job?.elapsedMs && p.status === 'done' ? `<span class="badge">${(p.job.elapsedMs/1000).toFixed(1)} s</span>` : ''}
         ${p.scale && p.scale !== 1 ? `<span class="badge warn">agrandie ×${p.scale}</span>` : ''}
         ${p.job?.interline ? `<span class="badge ${p.job.interlineTooLow ? 'err' : ''}">interligne ${p.job.interline} px</span>` : ''}
+        ${p.font ? `<span class="badge">police ${esc(p.font)}</span>` : ''}
         ${p.job?.measures ? `<span class="badge">${p.job.measures} mesures détectées</span>` : ''}
         ${rhythmBadge(p)}
         <span class="spacer"></span>
         ${p.status === 'done' || p.status === 'error' ? `
           <select class="rescale" aria-label="Agrandissement">${[1,1.5,2,3].map(f => `<option value="${f}" ${f===(p.scale||1)?'selected':''}>×${f}</option>`).join('')}</select>
+          <select class="refont" aria-label="Police des têtes">${FONTS.map(f => `<option value="${f}" ${f===p.font?'selected':''}>${f}</option>`).join('')}</select>
           <button class="btn sm" data-rerun="${p.uid}">Relancer</button>` : ''}
         ${p.scores.map(s => `<a class="btn sm" href="${s.url}" download="${esc(s.name.replace(/\.mxl$/i, '.musicxml'))}">MusicXML</a>`).join('')}
       </div>
@@ -365,18 +383,24 @@ function renderResults(){
 function rhythmBadge(p){
   const r = p.scores.find(s => s.parsed)?.parsed;
   if (!r) return '';
-  return r.bad.length ? `<span class="badge err">${r.bad.length} mesure(s) au rythme faux</span>`
-                      : `<span class="badge ok">rythme cohérent</span>`;
+  if (!r.issues.length) return `<span class="badge ok">rythme cohérent</span>`;
+  const vides = r.emptyMeasures.length;
+  return `<span class="badge err">${r.issues.length} mesure(s) au rythme faux</span>`
+       + (vides ? ` <span class="badge err">dont ${vides} vide(s)</span>` : '');
 }
 function rhythmNote(r){
   const info = `<div class="note info">${r.notes.length} notes — ${esc(durSummary(r.notes))}.</div>`;
-  if (!r.bad.length) return info;
-  const vides = r.emptyMeasures.length
-    ? ` Dont <b>${r.emptyMeasures.length} sans aucune note reconnue</b> (${esc(r.emptyMeasures.join(', '))}) : du contenu a été perdu.`
-    : '';
-  return `<div class="note warn">Durées incohérentes dans <b>${r.bad.length} mesure(s)</b> sur ${r.measures.length} :
-          ${esc(r.bad.join(', '))}. Attendu ${r.expected} temps par mesure (${r.metric}).${vides}
-          Ces mesures sonneront faux.</div>` + info;
+  if (!r.issues.length) return info;
+  const li = r.issues.map(i =>
+    `<li><b>Mesure ${esc(i.num)}</b> — ${esc(i.lines.join(' ; '))}</li>`).join('');
+  return `<div class="note warn">
+            <b>${r.issues.length} mesure(s)</b> sur ${r.measures.length} ne retombent pas sur les
+            ${r.expected} temps de la métrique (${r.metric}) :
+            <ul style="margin:6px 0 0 18px;padding:0">${li}</ul>
+            <small style="display:block;margin-top:6px">Sur la partition reconstruite :
+              <b style="color:#e8590c">orange</b> = mesure au rythme faux,
+              <b style="color:#d6336c">rouge</b> = aucune note reconnue.</small>
+          </div>` + info;
 }
 function updateLog(p){
   const el = document.querySelector(`.page[data-uid="${p.uid}"] .log`);
@@ -384,12 +408,75 @@ function updateLog(p){
   const head = document.querySelector(`.page[data-uid="${p.uid}"] .page-head .badge.run`);
   if (head) head.outerHTML = statusBadge(p);
 }
+const COLOR_BAD = '#e8590c', COLOR_EMPTY = '#d6336c';
+
+// Coloration des notes : on teinte, dans le MusicXML, les notes des mesures signalées, pour la
+// seule partie concernée. OSMD lit l'attribut color des notes quand coloringEnabled est actif.
+function colorizeXml(xml, r){
+  if (!r?.flags?.size) return xml;
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.querySelector('parsererror')) return xml;
+    [...doc.documentElement.children].filter(e => e.tagName === 'part').forEach((part, pi) => {
+      [...part.children].filter(e => e.tagName === 'measure').forEach(m => {
+        const kind = r.flags.get(`${pi}|${m.getAttribute('number')}`);
+        if (!kind) return;
+        const col = kind === 'vide' ? COLOR_EMPTY : COLOR_BAD;
+        m.querySelectorAll('note').forEach(n => {
+          n.setAttribute('color', col);
+          n.querySelectorAll('notehead, stem, beam').forEach(e => e.setAttribute('color', col));
+        });
+      });
+    });
+    return new XMLSerializer().serializeToString(doc);
+  } catch { return xml; }
+}
+
+// Surlignage de la mesure entière : indispensable pour les mesures vides, qui n'ont par définition
+// aucune note à colorer. On superpose un rectangle au SVG rendu par OSMD.
+function highlightMeasures(osmd, el, r){
+  if (!r?.flags?.size) return;
+  try {
+    const svg = el.querySelector('svg');
+    const sheet = osmd.GraphicSheet || osmd.graphic;
+    if (!svg || !sheet?.MeasureList) return;
+    const unit = (osmd.EngravingRules?.UnitInPixels || 10) * (osmd.zoom || 1);
+    const ns = 'http://www.w3.org/2000/svg';
+    // une partie peut occuper plusieurs portées : on reconstitue portée -> partie
+    const partOfStaff = [];
+    Object.keys(r.staves).map(Number).sort((a, b) => a - b)
+      .forEach(pi => { for (let k = 0; k < (r.staves[pi] || 1); k++) partOfStaff.push(pi); });
+    const layer = document.createElementNS(ns, 'g');
+    svg.insertBefore(layer, svg.firstChild);
+    sheet.MeasureList.forEach(perStaff => (perStaff || []).forEach((gm, si) => {
+      const num = gm && String(gm.MeasureNumber ?? gm.parentSourceMeasure?.MeasureNumber ?? '');
+      const kind = num && r.flags.get(`${partOfStaff[si] ?? si}|${num}`);
+      if (!kind) return;
+      const b = gm.PositionAndShape;
+      const rect = document.createElementNS(ns, 'rect');
+      rect.setAttribute('x', (b.AbsolutePosition.x + b.BorderLeft) * unit);
+      rect.setAttribute('y', (b.AbsolutePosition.y + b.BorderTop) * unit);
+      rect.setAttribute('width', (b.BorderRight - b.BorderLeft) * unit);
+      rect.setAttribute('height', (b.BorderBottom - b.BorderTop) * unit);
+      rect.setAttribute('fill', kind === 'vide' ? 'rgba(214,51,108,.20)' : 'rgba(232,89,12,.16)');
+      layer.appendChild(rect);
+    }));
+  } catch { /* internes d'OSMD : on se passe du surlignage plutôt que de casser l'affichage */ }
+}
+
 async function drawScore(el, s){
   if (!el || !window.opensheetmusicdisplay) return;
   try {
-    const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {autoResize: true, backend: 'svg', drawTitle: !!s.parsed?.title, drawingParameters: 'compacttight'});
-    await osmd.load(s.xml);
+    // Audiveris exporte les sauts de systeme de la partition d'origine. Sans newSystemFromXML,
+    // OSMD les ignore et remet en page selon la largeur disponible : la reconstruction n'a alors
+    // plus le meme nombre de mesures par ligne que l'image, ce qui rend la comparaison penible.
+    const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {autoResize: true, backend: 'svg',
+      drawTitle: !!s.parsed?.title, drawingParameters: 'compacttight',
+      coloringEnabled: true, colorStemsLikeNoteheads: true,
+      newSystemFromXML: $('keepLayout').checked, newPageFromXML: $('keepLayout').checked});
+    await osmd.load(colorizeXml(s.xml, s.parsed));
     osmd.render();
+    highlightMeasures(osmd, el, s.parsed);
   } catch (e){
     el.innerHTML = `<div class="note err">Affichage impossible : ${esc(e.message)}</div>`;
   }
@@ -403,7 +490,10 @@ $('results').addEventListener('click', e => {
     card.querySelectorAll('[data-verdict]').forEach(b => b.classList.toggle('sel', b.dataset.verdict === p.verdict));
     renderReport();
   }
-  if (e.target.closest('[data-rerun]')){ p.retried = false; analyze(p, +card.querySelector('.rescale').value, false); }
+  if (e.target.closest('[data-rerun]')){
+    p.retried = false;
+    analyze(p, +card.querySelector('.rescale').value, false, card.querySelector('.refont').value);
+  }
 });
 $('results').addEventListener('input', e => {
   if (!e.target.classList.contains('comment')) return;
@@ -438,11 +528,12 @@ function parseMusicXml(text, ref){
   root.querySelectorAll('part-list > score-part').forEach(sp => partNames[sp.id] = sp.querySelector('part-name')?.textContent.trim() || sp.id);
   const r = {title: root.querySelector('work > work-title')?.textContent.trim() || root.querySelector('movement-title')?.textContent.trim() || '',
              fifths: null, mode: 'major', beats: null, beatType: null, notes: [], measures: [], staves: {}, total: 0,
-             lens: [], empty: new Set(), bad: [], expected: 4};
+             lens: [], zero: [], bad: [], issues: [], flags: new Map(), expected: 4};
   const kids = (el, tag) => [...el.children].filter(c => c.tagName === tag);
   kids(root, 'part').forEach((part, pi) => {
     let div = 1, pos = 0, prevStart = 0;
     const clefs = {}, open = new Map();
+    const pname = partNames[part.id] || `Partie ${pi + 1}`;
     r.staves[pi] = 1;
     kids(part, 'measure').forEach((m, mi) => {
       let maxPos = pos;
@@ -469,7 +560,7 @@ function parseMusicXml(text, ref){
             const chord = !!el.querySelector(':scope > chord');
             const start = chord ? prevStart : pos;
             if (!chord){ prevStart = pos; pos += d; maxPos = Math.max(maxPos, pos); }
-            if (d <= 0) r.empty.add(mNum);   // mesure sans contenu reconnu : rythme perdu
+            if (d <= 0) r.zero.push({num: mNum, pi, part: pname});   // note de durée nulle
             const p = el.querySelector(':scope > pitch');
             if (!p || d <= 0) break;
             const step = p.querySelector('step').textContent, alter = Math.round(+(p.querySelector('alter')?.textContent || 0));
@@ -486,14 +577,15 @@ function parseMusicXml(text, ref){
             }
             const pitch = Math.abs(alter) <= 1 ? step + (alter === 1 ? '#' : alter === -1 ? 'b' : '') + oct
                                                : SHARP_SPELL[midi % 12] + (Math.floor(midi / 12) - 1);
-            const note = {midi, pitch, start, d, pi, staff, voice, clef: clefs[staff] || 'G', partName: partNames[part.id] || `Partie ${pi+1}`};
+            const note = {midi, pitch, start, d, pi, staff, voice, clef: clefs[staff] || 'G', partName: pname};
             r.notes.push(note);
             if (ties.includes('start')) open.set(tk, note);
           }
         }
       }
       pos = maxPos;
-      if (m.getAttribute('implicit') !== 'yes') r.lens.push({num: mNum, len: pos - mStart, first: mi === 0});
+      if (m.getAttribute('implicit') !== 'yes')
+        r.lens.push({num: mNum, len: pos - mStart, first: mi === 0, pi, part: pname});
     });
     r.total = Math.max(r.total, pos);
   });
@@ -508,16 +600,33 @@ function checkRhythm(r, ref){
   const b = +(r.beats ?? ref?.beats) || 4, bt = +(r.beatType ?? ref?.beatType) || 4;
   r.metric = `${b}/${bt}`;
   r.expected = b * 4 / bt;
-  const empty = new Set(r.empty), bad = new Set();
-  for (const {num, len, first} of r.lens){
-    if (!len){ empty.add(num); continue; }     // aucune note reconnue : le contenu est perdu
+  // La longueur d'une mesure est la position la plus avancée qu'on y atteint, pas la somme des
+  // durées : les voix simultanées reviennent en arrière par <backup>, elles ne s'additionnent donc
+  // pas. Une ligne signalée est une ligne qui dépasse réellement la barre, ou qui n'atteint pas la fin.
+  const flags = new Map();     // "partie|mesure" -> 'vide' | 'rythme'
+  const detail = new Map();    // mesure -> Map(ligne -> explication)
+  const mark = (num, pi, part, kind, txt) => {
+    flags.set(`${pi}|${num}`, kind);
+    if (!detail.has(num)) detail.set(num, new Map());
+    detail.get(num).set(part, txt);
+  };
+  for (const {num, pi, part} of r.zero) mark(num, pi, part, 'vide', 'note de durée nulle');
+  for (const {num, len, first, pi, part} of r.lens){
+    if (!len){ mark(num, pi, part, 'vide', 'aucune note reconnue'); continue; }
     if (Math.abs(len - r.expected) < 1e-6) continue;
     if (first && len < r.expected) continue;   // anacrouse : première mesure incomplète, c'est normal
-    bad.add(num);
+    const ecart = +(len - r.expected).toFixed(3);
+    mark(num, pi, part, 'rythme', `${+len.toFixed(3)} temps (${ecart > 0 ? '+' : ''}${ecart})`);
   }
   const byNum = (a, b) => (+a || 0) - (+b || 0);
-  r.emptyMeasures = [...empty].sort(byNum);
-  r.bad = [...new Set([...empty, ...bad])].sort(byNum);
+  r.flags = flags;
+  r.issues = [...detail.entries()].sort((x, y) => byNum(x[0], y[0])).map(([num, lines]) => ({
+    num,
+    vide: [...flags].some(([k, v]) => v === 'vide' && k.endsWith(`|${num}`)),
+    lines: [...lines.entries()].map(([n, t]) => `${n} : ${t}`),
+  }));
+  r.bad = r.issues.map(i => i.num);
+  r.emptyMeasures = r.issues.filter(i => i.vide).map(i => i.num);
 }
 
 // ---------- Assemblage des pages ----------
@@ -625,6 +734,7 @@ $('lines').addEventListener('click', e => {
 $('allOn').onclick = () => { merged.lines.forEach(l => l.settings.on = true); refreshPlayable(); restartIfPlaying(); };
 $('allOff').onclick = () => { merged.lines.forEach(l => l.settings.on = false); refreshPlayable(); pause(); };
 $('splitVoices').onchange = rebuild;
+$('keepLayout').onchange = () => { pages.forEach(p => p.scores.forEach(s => { s.el = null; })); renderResults(); };
 $('tempo').onchange = e => { st.tempo = Math.max(30, Math.min(240, Math.round(+e.target.value) || DEFAULT_TEMPO)); e.target.value = st.tempo; restartIfPlaying(); updateUI(curBeat()); };
 $('tempoReset').onclick = () => { st.tempo = DEFAULT_TEMPO; $('tempo').value = st.tempo; restartIfPlaying(); updateUI(curBeat()); };
 $('trDown').onclick = () => { st.transpose = Math.max(-12, st.transpose - 1); refreshKey(); restartIfPlaying(); };
@@ -724,13 +834,13 @@ function renderReport(){
   const cell = t => String(t ?? '').replace(/\|/g, '/').replace(/\n/g, ' ');
   const lines = [
     `Bilan Music Reader v0 — ${new Date().toLocaleString('fr-FR')}`, '',
-    '| # | Fichier | Taille | Agrand. | Temps | Interligne | Mesures | Lignes | Notes | Rythme | Verdict | Commentaire |',
-    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+    '| # | Fichier | Taille | Agrand. | Police | Temps | Interligne | Mesures | Lignes | Notes | Rythme | Verdict | Commentaire |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...rows.map(p => {
       const r = p.scores.find(s => s.parsed)?.parsed;
       const nLines = r ? new Set(r.notes.map(n => `${n.pi}|${n.staff}`)).size : '';
       const rythme = !r ? '' : r.bad.length ? `${r.bad.length} mesure(s) fausses (${r.bad.slice(0, 8).join(', ')}${r.bad.length > 8 ? '…' : ''})` : 'cohérent';
-      return `| ${pages.indexOf(p) + 1} | ${cell(p.name)}${isSpread(p) ? ' ⚠ 2 pages ?' : ''} | ${p.w}×${p.h} | ×${p.scale || 1} | ${p.job?.elapsedMs ? (p.job.elapsedMs / 1000).toFixed(1) + ' s' : ''} | ${p.job?.interline ?? ''} | ${r ? r.measures.length : ''} | ${nLines} | ${r ? r.notes.length : ''} | ${cell(rythme)} | ${p.status === 'error' ? '❌ échec : ' + cell(p.error) : VERDICTS[p.verdict] || '—'} | ${cell(p.comment)} |`;
+      return `| ${pages.indexOf(p) + 1} | ${cell(p.name)}${isSpread(p) ? ' ⚠ 2 pages ?' : ''} | ${p.w}×${p.h} | ×${p.scale || 1} | ${cell(p.font || '')} | ${p.job?.elapsedMs ? (p.job.elapsedMs / 1000).toFixed(1) + ' s' : ''} | ${p.job?.interline ?? ''} | ${r ? r.measures.length : ''} | ${nLines} | ${r ? r.notes.length : ''} | ${cell(rythme)} | ${p.status === 'error' ? '❌ échec : ' + cell(p.error) : VERDICTS[p.verdict] || '—'} | ${cell(p.comment)} |`;
     }),
   ];
   $('report').value = lines.join('\n');

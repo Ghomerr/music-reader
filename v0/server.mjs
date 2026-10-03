@@ -14,6 +14,15 @@ const HOST = process.env.HOST || '127.0.0.1';
 const JOBS_DIR = path.join(ROOT, 'jobs');
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const TESSDATA = process.env.TESSDATA_PREFIX || path.join(ROOT, 'tools', 'tessdata');
+// Audiveris reconnait les tetes de notes en les comparant aux gabarits d'une police de reference.
+// La famille retenue change tout : sur une gravure classique, Leland retrouve des rondes que
+// Bravura (le defaut d'Audiveris) laisse entierement passer ; sur une grille de jazz calligraphiee,
+// FinaleJazz retrouve en plus les barres de mesure. D'ou le choix page par page dans l'interface.
+const MUSIC_FONTS = ['Leland', 'Bravura', 'FinaleJazz', 'Primus', 'MusicalSymbols', 'JazzPerc'];
+const MUSIC_FONT = MUSIC_FONTS.includes(process.env.MUSIC_FONT) ? process.env.MUSIC_FONT : 'Leland';
+// Bonus accorde aux tetes sans hampe (les rondes). Sans effet des lors que la police est la bonne,
+// et nuisible au-dela de 0,5 : desactive par defaut, la variable reste la pour experimenter.
+const STEM_LESS_BOOST = process.env.STEM_LESS_BOOST ?? '';
 const MAX_UPLOAD = 30 * 1024 * 1024;
 const OMR_TIMEOUT = 5 * 60 * 1000;
 const JOB_TTL = 2 * 60 * 60 * 1000;
@@ -33,14 +42,14 @@ const jobs = new Map();
 const queue = [];
 let busy = false;
 
-function createJob(name, data) {
+function createJob(name, data, font) {
   const id = crypto.randomBytes(6).toString('hex');
   const dir = path.join(JOBS_DIR, id);
   fs.mkdirSync(path.join(dir, 'out'), { recursive: true });
   const ext = (path.extname(name).toLowerCase().match(/^\.(png|jpe?g|gif|bmp|tiff?)$/) || ['.png'])[0];
   const input = path.join(dir, 'input' + ext);
   fs.writeFileSync(input, data);
-  const job = { id, name, dir, input, status: 'queued', createdAt: Date.now(), log: [], scores: [] };
+  const job = { id, name, dir, input, font, status: 'queued', createdAt: Date.now(), log: [], scores: [] };
   jobs.set(id, job);
   queue.push(job);
   pump();
@@ -57,7 +66,10 @@ function runJob(job) {
   return new Promise(resolve => {
     job.status = 'running';
     job.startedAt = Date.now();
-    const args = ['-batch', '-export', '-output', path.join(job.dir, 'out'), '--', job.input];
+    const args = ['-batch', '-export', '-output', path.join(job.dir, 'out'),
+                  '-constant', `org.audiveris.omr.ui.symbol.MusicFont.defaultMusicFamily=${job.font}`];
+    if (STEM_LESS_BOOST) args.push('-constant', `org.audiveris.omr.sheet.note.NoteHeadsBuilder.stemLessBoost=${STEM_LESS_BOOST}`);
+    args.push('--', job.input);
     const child = spawn(AUDIVERIS, args, { env: { ...process.env, TESSDATA_PREFIX: TESSDATA }, windowsHide: true });
     const onData = buf => {
       for (const line of buf.toString('utf8').split(/\r?\n/)) {
@@ -141,7 +153,7 @@ function jobView(job) {
     id: job.id, name: job.name, status: job.status, error: job.error,
     queuePosition: pos >= 0 ? pos + 1 : 0,
     elapsedMs: job.startedAt ? (job.finishedAt || Date.now()) - job.startedAt : 0,
-    interline: job.interline ?? null, interlineTooLow: !!job.interlineTooLow, measures: job.measures ?? null,
+    interline: job.interline ?? null, interlineTooLow: !!job.interlineTooLow, measures: job.measures ?? null, font: job.font,
     scores: job.scores.map(s => ({ name: path.parse(job.name).name + s.file.slice('input'.length), url: `/api/jobs/${job.id}/files/${encodeURIComponent(s.xml)}` })),
     log: job.log.slice(-400),
   };
@@ -187,13 +199,15 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url.pathname === '/api/health') {
       const langs = fs.existsSync(TESSDATA) ? fs.readdirSync(TESSDATA).filter(f => f.endsWith('.traineddata')).map(f => f.slice(0, -12)) : [];
-      return send(res, 200, { audiveris: AUDIVERIS || null, ocrLanguages: langs, queue: queue.length, busy });
+      return send(res, 200, { audiveris: AUDIVERIS || null, ocrLanguages: langs, queue: queue.length, busy,
+                              musicFonts: MUSIC_FONTS, musicFont: MUSIC_FONT });
     }
     if (url.pathname === '/api/jobs' && req.method === 'POST') {
       if (!AUDIVERIS) return send(res, 503, { error: 'Audiveris introuvable : lancer setup.ps1 ou définir AUDIVERIS_CMD.' });
       const data = await readBody(req);
       if (!data.length) return send(res, 400, { error: 'image vide' });
-      const job = createJob(url.searchParams.get('name') || 'page.png', data);
+      const asked = url.searchParams.get('font');
+      const job = createJob(url.searchParams.get('name') || 'page.png', data, MUSIC_FONTS.includes(asked) ? asked : MUSIC_FONT);
       return send(res, 201, jobView(job));
     }
     if (parts[0] === 'api' && parts[1] === 'jobs' && parts[2]) {
@@ -219,4 +233,6 @@ server.listen(PORT, HOST, () => {
   console.log(`Music Reader v0 : http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
   console.log(AUDIVERIS ? `Audiveris : ${AUDIVERIS}` : 'ATTENTION : Audiveris introuvable (lancer setup.ps1 ou définir AUDIVERIS_CMD).');
   console.log(`OCR (tessdata) : ${TESSDATA}`);
+  console.log(`Police des tetes par defaut : ${MUSIC_FONT} (familles : ${MUSIC_FONTS.join(', ')})`);
+  if (STEM_LESS_BOOST) console.log(`Bonus tetes sans hampe : ${STEM_LESS_BOOST}`);
 });
