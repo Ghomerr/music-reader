@@ -8,7 +8,8 @@ Page simple pour vérifier, sur de vraies partitions, si la reconnaissance d'Aud
 - Analyse de chaque page par **Audiveris 5.11** en ligne de commande, l'une après l'autre.
 - Si l'image est en trop basse résolution (interligne trop petit), **agrandissement automatique** puis nouvel essai. On peut aussi forcer ×1,5 / ×2 / ×3 et relancer une page.
 - **Comparaison côte à côte** : image d'origine / partition reconstruite (MusicXML affiché avec OpenSheetMusicDisplay), journal Audiveris, téléchargement du MusicXML.
-- **Contrôle du rythme** : pour chaque mesure, la somme des durées doit retomber sur la métrique. Les mesures qui n'y retombent pas sont listées — ce sont celles qui sonneront faux.
+- **Contrôle du rythme** : pour chaque mesure et chaque ligne musicale, les durées doivent remplir exactement la métrique, en tenant compte des voix simultanées. Les mesures fautives sont listées avec la ligne en cause et l'écart, et colorées sur la partition reconstruite : orange pour un rythme faux, rouge pour une mesure sans aucune note reconnue.
+- **Notes perdues par Audiveris** : le serveur lit son journal et relève les notes qu'il a reconnues sans savoir les placer dans le temps (`No timeOffset`). Elles ne sont pas exportées, et la mesure peut alors sembler juste ; elles sont donc signalées à part, avec leur portée. Audiveris ne fait ce contrôle que s'il connaît la métrique : sur une page de suite qui ne la réimprime pas, seul notre contrôle des durées veille.
 - **Répartition des durées** lues (rondes, blanches, noires, croches…), pour vérifier d'un coup d'œil que les figures sont bien reconnues.
 - **Verdict par page** (bon / erreurs mineures / inutilisable + commentaire) et **bilan** en tableau Markdown à copier.
 - **Écoute** de la musique assemblée : choix des lignes (par portée, ou par voix), transposition, lecture.
@@ -70,7 +71,8 @@ Navigateur (public/index.html)
 
 server.mjs (Node, sans dépendance)
   ├─ file d'attente : une analyse à la fois
-  ├─ Audiveris -batch -export -output jobs/<id>/out -- image
+  ├─ Audiveris -batch -export -output jobs/<id>/out -constant …MusicFont.defaultMusicFamily=<police> -- image
+  ├─ relève dans le journal les notes reconnues mais non placées (No timeOffset)
   ├─ décompresse le .mxl → MusicXML
   └─ supprime les jobs de plus de 2 h (rien n'est conservé)
 ```

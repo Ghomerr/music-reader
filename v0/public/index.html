@@ -327,7 +327,7 @@ async function analyze(p, scale, auto, font){
     for (const s of p.job.scores){
       const xml = await (await fetch(s.url)).text();
       let parsed = null, perr = '';
-      try { parsed = parseMusicXml(xml, metricRef()); } catch (e){ perr = e.message; }
+      try { parsed = parseMusicXml(xml, metricRef(), p.job.unplaced); } catch (e){ perr = e.message; }
       p.scores.push({name: s.name, url: s.url, xml, parsed, perr});
     }
   } catch (e){
@@ -385,7 +385,7 @@ function rhythmBadge(p){
   if (!r) return '';
   if (!r.issues.length) return `<span class="badge ok">rythme cohérent</span>`;
   const vides = r.emptyMeasures.length;
-  return `<span class="badge err">${r.issues.length} mesure(s) au rythme faux</span>`
+  return `<span class="badge err">${r.issues.length} mesure(s) à vérifier</span>`
        + (vides ? ` <span class="badge err">dont ${vides} vide(s)</span>` : '');
 }
 function rhythmNote(r){
@@ -394,11 +394,11 @@ function rhythmNote(r){
   const li = r.issues.map(i =>
     `<li><b>Mesure ${esc(i.num)}</b> — ${esc(i.lines.join(' ; '))}</li>`).join('');
   return `<div class="note warn">
-            <b>${r.issues.length} mesure(s)</b> sur ${r.measures.length} ne retombent pas sur les
-            ${r.expected} temps de la métrique (${r.metric}) :
+            <b>${r.issues.length} mesure(s)</b> sur ${r.measures.length} à vérifier
+            (métrique ${r.metric}, soit ${r.expected} temps par mesure) :
             <ul style="margin:6px 0 0 18px;padding:0">${li}</ul>
             <small style="display:block;margin-top:6px">Sur la partition reconstruite :
-              <b style="color:#e8590c">orange</b> = mesure au rythme faux,
+              <b style="color:#e8590c">orange</b> = rythme faux ou note perdue par Audiveris,
               <b style="color:#d6336c">rouge</b> = aucune note reconnue.</small>
           </div>` + info;
 }
@@ -519,7 +519,7 @@ const PC_NAMES = ['Do','Do♯','Ré','Mi♭','Mi','Fa','Fa♯','Sol','La♭','La
 const PC_CODES = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
 const SHARP_SPELL = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
-function parseMusicXml(text, ref){
+function parseMusicXml(text, ref, unplaced){
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   if (doc.querySelector('parsererror')) throw new Error('XML invalide');
   const root = doc.documentElement;
@@ -528,12 +528,14 @@ function parseMusicXml(text, ref){
   root.querySelectorAll('part-list > score-part').forEach(sp => partNames[sp.id] = sp.querySelector('part-name')?.textContent.trim() || sp.id);
   const r = {title: root.querySelector('work > work-title')?.textContent.trim() || root.querySelector('movement-title')?.textContent.trim() || '',
              fifths: null, mode: 'major', beats: null, beatType: null, notes: [], measures: [], staves: {}, total: 0,
-             lens: [], zero: [], bad: [], issues: [], flags: new Map(), expected: 4};
+             lens: [], zero: [], bad: [], issues: [], flags: new Map(), expected: 4,
+             names: [], unplaced: unplaced || []};
   const kids = (el, tag) => [...el.children].filter(c => c.tagName === tag);
   kids(root, 'part').forEach((part, pi) => {
     let div = 1, pos = 0, prevStart = 0;
     const clefs = {}, open = new Map();
     const pname = partNames[part.id] || `Partie ${pi + 1}`;
+    r.names[pi] = pname;
     r.staves[pi] = 1;
     kids(part, 'measure').forEach((m, mi) => {
       let maxPos = pos;
@@ -606,9 +608,11 @@ function checkRhythm(r, ref){
   const flags = new Map();     // "partie|mesure" -> 'vide' | 'rythme'
   const detail = new Map();    // mesure -> Map(ligne -> explication)
   const mark = (num, pi, part, kind, txt) => {
-    flags.set(`${pi}|${num}`, kind);
+    const key = `${pi}|${num}`;
+    if (flags.get(key) !== 'vide') flags.set(key, kind);   // une mesure vide reste rouge
     if (!detail.has(num)) detail.set(num, new Map());
-    detail.get(num).set(part, txt);
+    const prev = detail.get(num).get(part);
+    detail.get(num).set(part, prev ? `${prev} ; ${txt}` : txt);
   };
   for (const {num, pi, part} of r.zero) mark(num, pi, part, 'vide', 'note de durée nulle');
   for (const {num, len, first, pi, part} of r.lens){
@@ -617,6 +621,29 @@ function checkRhythm(r, ref){
     if (first && len < r.expected) continue;   // anacrouse : première mesure incomplète, c'est normal
     const ecart = +(len - r.expected).toFixed(3);
     mark(num, pi, part, 'rythme', `${+len.toFixed(3)} temps (${ecart > 0 ? '+' : ''}${ecart})`);
+  }
+  // Symboles qu'Audiveris a vus sans savoir les placer dans le temps (relevés dans son journal par le
+  // serveur) : ils manquent au résultat, et la mesure peut tomber juste en apparence. Le journal donne
+  // la portée dans la page ; on retrouve la partie en comptant les portées d'un système.
+  const order = Object.keys(r.staves).map(Number).sort((a, b) => a - b);
+  const staffOf = order.flatMap(pi => Array.from({length: r.staves[pi] || 1}, (_, k) => ({pi, k: k + 1})));
+  const lost = new Map();      // "partie|mesure" -> libellés
+  for (const u of r.unplaced || []){
+    const at = u.staff && staffOf.length ? staffOf[(u.staff - 1) % staffOf.length] : null;
+    let pi = at?.pi, k = at?.k;
+    if (u.part && pi !== u.part - 1){ pi = u.part - 1; k = null; }   // systèmes incomplets : on se fie à Audiveris
+    pi ??= 0;
+    const name = durName(u.dur[0] / u.dur[1] * 4);
+    const what = (u.rest ? `silence de ${name}` : name) + (k && (r.staves[pi] || 1) > 1 ? ` portée ${k}` : '');
+    const key = `${pi}|${u.measure}`;
+    if (!lost.has(key)) lost.set(key, []);
+    lost.get(key).push(what);
+  }
+  for (const [key, list] of lost){
+    const [pi, num] = key.split('|');
+    const s = list.length > 1 ? 's' : '';
+    mark(num, +pi, (r.names || [])[pi] || `Partie ${+pi + 1}`, 'rythme',
+         `${list.length} symbole${s} vu${s} par Audiveris mais non placé${s} dans le temps (${list.join(', ')}), donc absent${s} du résultat`);
   }
   const byNum = (a, b) => (+a || 0) - (+b || 0);
   r.flags = flags;
@@ -839,7 +866,7 @@ function renderReport(){
     ...rows.map(p => {
       const r = p.scores.find(s => s.parsed)?.parsed;
       const nLines = r ? new Set(r.notes.map(n => `${n.pi}|${n.staff}`)).size : '';
-      const rythme = !r ? '' : r.bad.length ? `${r.bad.length} mesure(s) fausses (${r.bad.slice(0, 8).join(', ')}${r.bad.length > 8 ? '…' : ''})` : 'cohérent';
+      const rythme = !r ? '' : r.bad.length ? `${r.bad.length} à vérifier (${r.bad.slice(0, 8).join(', ')}${r.bad.length > 8 ? '…' : ''})` : 'cohérent';
       return `| ${pages.indexOf(p) + 1} | ${cell(p.name)}${isSpread(p) ? ' ⚠ 2 pages ?' : ''} | ${p.w}×${p.h} | ×${p.scale || 1} | ${cell(p.font || '')} | ${p.job?.elapsedMs ? (p.job.elapsedMs / 1000).toFixed(1) + ' s' : ''} | ${p.job?.interline ?? ''} | ${r ? r.measures.length : ''} | ${nLines} | ${r ? r.notes.length : ''} | ${cell(rythme)} | ${p.status === 'error' ? '❌ échec : ' + cell(p.error) : VERDICTS[p.verdict] || '—'} | ${cell(p.comment)} |`;
     }),
   ];

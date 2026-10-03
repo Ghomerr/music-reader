@@ -49,7 +49,7 @@ function createJob(name, data, font) {
   const ext = (path.extname(name).toLowerCase().match(/^\.(png|jpe?g|gif|bmp|tiff?)$/) || ['.png'])[0];
   const input = path.join(dir, 'input' + ext);
   fs.writeFileSync(input, data);
-  const job = { id, name, dir, input, font, status: 'queued', createdAt: Date.now(), log: [], scores: [] };
+  const job = { id, name, dir, input, font, status: 'queued', createdAt: Date.now(), log: [], scores: [], unplaced: [] };
   jobs.set(id, job);
   queue.push(job);
   pump();
@@ -81,6 +81,13 @@ function runJob(job) {
         if (sc) job.interline = +sc[2];
         const ms = /(\d+) raw measures/.exec(line);
         if (ms) job.measures = (job.measures || 0) + +ms[1];
+        // Note ou silence qu'Audiveris a reconnu sans savoir le placer dans le temps : il ne sera pas
+        // exporte, et la mesure peut quand meme tomber juste. Seul le journal le signale.
+        // Ex. : Measure{#3P2} No timeOffset for HeadChordInter#6510{(0.905/0.905) staff:2 slot#4 dur:1/4}
+        const lost = /Measure\{#(\d+)(?:P(\d+))?\} No timeOffset for (Head|Rest)ChordInter#(\d+)\{[^}]*?staff:(\d+)[^}]*?dur:(\d+)\/(\d+)/.exec(line);
+        if (lost && !job.unplaced.some(u => u.id === lost[4]))
+          job.unplaced.push({ measure: lost[1], part: lost[2] ? +lost[2] : null, rest: lost[3] === 'Rest',
+                              id: lost[4], staff: +lost[5], dur: [+lost[6], +lost[7]] });
       }
       if (job.log.length > 2000) job.log.splice(0, job.log.length - 2000);
     };
@@ -154,6 +161,7 @@ function jobView(job) {
     queuePosition: pos >= 0 ? pos + 1 : 0,
     elapsedMs: job.startedAt ? (job.finishedAt || Date.now()) - job.startedAt : 0,
     interline: job.interline ?? null, interlineTooLow: !!job.interlineTooLow, measures: job.measures ?? null, font: job.font,
+    unplaced: job.unplaced,
     scores: job.scores.map(s => ({ name: path.parse(job.name).name + s.file.slice('input'.length), url: `/api/jobs/${job.id}/files/${encodeURIComponent(s.xml)}` })),
     log: job.log.slice(-400),
   };

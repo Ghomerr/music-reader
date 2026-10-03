@@ -140,6 +140,13 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 - **Décision** : **le tempo n'est pas analysé** — 100 BPM au départ, réglés à l'oreille. L'effort porte sur les hauteurs et les durées.
 - **Les rondes étaient toutes perdues, et la police de référence en était la cause.** Audiveris compare les têtes de notes aux gabarits d'une police ; celle qu'il utilise par défaut (Bravura) ne convenait à aucune des deux partitions testées — zéro ronde reconnue de part et d'autre, sans le moindre avertissement. `Leland` en retrouve 15 sur la gravure classique **et** fait tomber les mesures fausses de 5 à 3 ; `FinaleJazz`, sur la grille calligraphiée, retrouve en plus les barres de mesure (42 mesures détectées au lieu de 31, pour 44 réelles). **Aucune police ne gagne partout. Décision** : `Leland` par défaut, et le choix de la police se fait **page par page** dans l'interface.
 - Ce que cet épisode apprend sur la suite : une figure entière peut disparaître sans qu'Audiveris signale quoi que ce soit, et seul le contrôle des durées l'a révélé. La **correction manuelle** (§7) n'est donc pas un confort, c'est le filet de sécurité du projet.
+- **Les notes qui manquent encore ont trois causes distinctes**, établies note par note dans le modèle interne d'Audiveris (fichier `.omr`) sur « Over The Rainbow » :
+  - *note vue puis jetée* — page 1, mesure 3 : la noire bémolisée de la main droite est détectée (tête, hampe, accord), mais l'étape qui place les notes dans le temps n'y arrive pas, et une note sans position n'est pas exportée. Le journal le dit (`No timeOffset for HeadChordInter … slot#4`). Même motif, même échec aux mesures 11 et 16 ;
+  - *symbole manqué* — page 2, mesure 18 : sept croches sur huit ont leur crochet, la septième non ; elle devient une noire. Sa hampe et son crochet démarrent pile sur une ligne de portée, que l'outil efface avant de chercher les symboles. Rien dans le journal ;
+  - *image dégradée* — page 3, mesure 38 : la hampe de la dernière croche est presque effacée sur la photocopie. Sans hampe, une tête noire n'existe pas : elle est écartée et il ne reste rien. Rien dans le journal non plus.
+- **Analyser les pages comme un seul livre** permet à Audiveris de reprendre la métrique de la page 1 sur les suivantes (`Time value reused from sheet#1`) ; seul, page par page, il ne peut contrôler aucun rythme sur les pages de suite. Mais quand il ne sait pas placer une note, il la **supprime** et la mesure retombe juste : notre contrôle des durées ne voit alors plus rien. Ce mode n'a de sens que couplé à la lecture du journal.
+- Assombrir l'image avant l'analyse a été essayé : aucune note retrouvée, et un peu plus de mesures fausses. Piste écartée.
+- **Décision** : la v0 lit le journal d'Audiveris et signale les notes qu'il a jetées ; le mode « livre unique » est écarté ; corriger nous-mêmes Audiveris est mis de côté tant que les erreurs restent assez rares pour être reprises à la main.
 
 ## 7. Hors V1 (pistes V2)
 
@@ -150,6 +157,7 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 - **Correction manuelle des notes** — voir ci-dessous.
 - **Correction manuelle des paroles** — voir ci-dessous.
 - **Réimpression de la partition** — voir ci-dessous.
+- **Fiabiliser la reconnaissance**, jusqu'à corriger les bibliothèques si besoin — voir ci-dessous.
 - Recadrage/redressement des photos.
 
 ### Correction manuelle des notes
@@ -168,7 +176,7 @@ Deux raccords avec le reste du projet :
 
 ### Correction manuelle des paroles
 
-L'OCR des paroles est le maillon le plus fragile de la chaîne : sur les essais, les syllabes ressortent souvent déformées (« Là - haut » lu « Lia - hunt »). Elles doivent donc être **éditables**, syllabe par syllabe, sous la note à laquelle elles sont rattachées. Comme pour les notes, une paroles corrigée à la main est conservée dans le fichier projet et survit à une réanalyse.
+L'OCR des paroles est le maillon le plus fragile de la chaîne : sur les essais, les syllabes ressortent souvent déformées (« Là - haut » lu « Lia - hunt »). Elles doivent donc être **éditables**, syllabe par syllabe, sous la note à laquelle elles sont rattachées. Comme pour les notes, une syllabe corrigée à la main est conservée dans le fichier projet et survit à une réanalyse.
 
 Les paroles n'entrent pas dans la synthèse : leur qualité n'empêche jamais d'écouter. Elles ne comptent que pour la relecture et pour l'impression.
 
@@ -183,6 +191,28 @@ Une fois la partition relue, corrigée et réglée, on doit pouvoir **la ressort
 
 Un point à ne pas oublier : l'impression se fait **sans les couleurs de diagnostic** (orange et rouge). Elles servent à la relecture, pas à la partition finale — et une partition où subsistent des mesures douteuses doit malgré tout pouvoir s'imprimer proprement.
 
+### Fiabiliser la reconnaissance
+
+Les trois causes relevées à l'étape 1 ne se traitent pas de la même façon :
+
+| Cause | Visible où ? | Ce qu'on peut faire |
+|---|---|---|
+| Note vue puis jetée par Audiveris | Journal d'Audiveris (`No timeOffset`) | Lire le journal et signaler la mesure, même quand son total tombe juste (fait dans la v0). Correction manuelle. |
+| Symbole manqué (crochet, point…) | Contrôle des durées, si la métrique est connue | Correction manuelle. Signaler le cas en amont. |
+| Image dégradée | Contrôle des durées | Scanner l'original plutôt qu'une photocopie, en niveaux de gris, 300 à 400 dpi. Correction manuelle. |
+
+Où on en est :
+
+1. **Lire le journal d'Audiveris** — *fait dans la v0.* Le serveur relève les symboles qu'Audiveris a vus sans savoir les placer dans le temps, et la page les rattache à leur mesure et à leur ligne musicale, en orange sur la partition. Limite : Audiveris ne vérifie le rythme que s'il connaît la métrique, donc son journal reste muet sur les pages de suite qui ne la réimpriment pas. Notre contrôle des durées, qui reprend la métrique de la page 1, couvre ces pages-là.
+2. **Analyser toutes les pages comme un seul livre** — *écarté.* La métrique se propage bien, mais Audiveris supprime alors les notes qu'il ne sait pas placer : sur l'essai, la détection n'y gagne rien et une note de plus disparaît.
+3. **Partir d'une meilleure image** — *pas d'original disponible* pour les partitions actuelles, qui sont des photocopies de photocopies. Les erreurs restantes étant peu nombreuses, la correction manuelle s'en chargera.
+4. **Corriger les bibliothèques** — *mis de côté pour l'instant, à reconsidérer si les erreurs se révèlent trop fréquentes à l'usage.* Pour mémoire :
+   - **Audiveris** (Java, licence **AGPL-3.0**) : c'est lui qui produit les trois erreurs ci-dessus. On peut le forker et le corriger. Attention à la licence : un Audiveris modifié servi à travers le site oblige à **publier le code source de la version modifiée** à ses utilisateurs. Appeler Audiveris en ligne de commande, comme programme séparé, est généralement considéré comme ne pas étendre l'AGPL au code de notre serveur — à faire confirmer avant la mise en ligne. Coût réel : un gros code Java à prendre en main, et un fork à maintenir à chaque nouvelle version.
+   - **OpenSheetMusicDisplay** (TypeScript, licence BSD-3, très permissive) : il ne fait qu'afficher, il n'est pour rien dans les erreurs de reconnaissance. Le forker n'aurait d'intérêt que pour l'affichage (couleurs, saisie des corrections).
+   - Avant d'en arriver là, il faudrait d'abord remonter les cas aux mainteneurs d'Audiveris : le projet est actif, et on dispose de cas reproductibles et précis (image, mesure, identifiant de l'objet, étape en cause).
+
+La correction manuelle reste nécessaire quoi qu'il arrive : aucune de ces pistes ne rattrapera une hampe effacée sur une photocopie.
+
 ## 8. Risques
 
 | Risque | Mitigation |
@@ -190,6 +220,7 @@ Un point à ne pas oublier : l'impression se fait **sans les couleurs de diagnos
 | Qualité OMR insuffisante sur certaines partitions | Étape 1 de test avant développement ; alternatives (homr, oemer) ; correction manuelle en V2. |
 | Rythme faux alors que les hauteurs sont bonnes | Contrôle automatique des durées mesure par mesure, affiché dès l'analyse : l'utilisateur sait quelles mesures se méfier. |
 | Image contenant deux pages | Avertissement à l'import quand l'image est plus large que haute. |
+| Note jetée par Audiveris sans trace dans le résultat | Lecture du journal d'Audiveris en plus du contrôle des durées (§7, « Fiabiliser la reconnaissance »). |
 | Lignes incohérentes entre pages | Raccord par position + avertissement à l'utilisateur. |
 | Temps d'analyse / mémoire serveur | Jobs asynchrones, une analyse à la fois, dimensionnement 2 Go. |
 | Téléchargement de fichiers sur iOS en PWA | Web Share API en priorité. |
