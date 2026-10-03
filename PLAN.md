@@ -8,9 +8,11 @@ Application qui lit une partition à partir d'images, en extrait les notes et le
 |---|---|
 | Lignes musicales | Une ligne = une partie jouée en même temps (mélodie, harmonie, basse…). Les systèmes successifs d'une même partie sont enchaînés automatiquement. |
 | Sources | Scans ou images issues d'internet : bonne qualité, droites. Pas de manuscrit, pas de recadrage/redressement en V1. |
+| Découpage | **Une image = une page de partition.** Les scans de recueils où deux pages se font face doivent être séparés **en amont, au moment du scan**. Ni détection ni découpage automatique. |
 | Plusieurs pages | Une musique peut s'étendre sur plusieurs images, ordonnables par l'utilisateur. |
 | Formats d'entrée | Images uniquement (PNG, JPG). **Pas de PDF en V1.** |
-| Tempo | Lu sur la partition si indiqué, sinon **100 BPM** par défaut. Toujours modifiable. |
+| Tempo | **Non analysé.** Départ à **100 BPM**, ajusté à l'oreille après la synthèse. |
+| Objectif de l'analyse | Les **hauteurs** et les **durées** (blanche, noire, croche…). C'est d'elles seules que dépend la justesse de la restitution ; le reste (tempo, nuances, titres) est accessoire. |
 | Visualisation | Uniquement la partition **reconstruite** à partir de l'analyse (pas d'affichage de l'image d'origine à l'étape d'écoute). |
 | Sauvegarde | Pas de base de données. **Fichier projet JSON** exporté puis rechargeable à la place d'une partition. |
 | Export audio | **WAV** (généré dans le navigateur). |
@@ -19,16 +21,18 @@ Application qui lit une partition à partir d'images, en extrait les notes et le
 ## 2. Parcours utilisateur
 
 1. **Importer**
-   - Ajouter une ou plusieurs images (glisser-déposer, sélecteur, appareil photo sur mobile).
+   - Ajouter une ou plusieurs images (glisser-déposer, sélecteur, appareil photo sur mobile), **une page de partition par image**.
    - Miniatures numérotées : réordonner, supprimer, ajouter des pages.
+   - Avertissement si une image est plus large que haute : c'est en général un scan de deux pages à séparer.
    - Ou **ouvrir un projet `.json`** → saute l'analyse, arrive directement à l'étape 3 avec les réglages restaurés.
 2. **Analyser**
    - Reconnaissance page par page avec progression, puis assemblage en une seule musique.
-   - Résumé : pages, lignes détectées, mesures, armure/tonalité, mesure, tempo (lu ou défaut).
+   - Résumé : pages, lignes détectées, mesures, notes et répartition des durées, armure/tonalité, métrique.
    - Avertissement si le nombre de lignes diffère d'une page à l'autre.
+   - **Signalement des mesures dont les durées ne retombent pas sur la métrique** : principal indicateur de qualité.
 3. **Écouter**
    - **Lignes** : activer/désactiver, solo, instrument et volume par ligne.
-   - **Tempo** : curseur, saisie, ±1/±10, réinitialiser.
+   - **Tempo** : curseur, saisie, ±1/±10, réinitialiser (départ à 100 BPM, jamais lu sur la partition).
    - **Tonalité** : ± demi-ton, ± octave, affichage de la tonalité résultante.
    - **Lecture** : Play/Pause, Stop, boucle, déplacement dans la barre de progression, notes surlignées sur la partition. Réglages appliqués en direct.
    - **Exporter** : projet `.json` et audio `.wav`.
@@ -56,9 +60,10 @@ Serveur Node.js (Docker, sans état, sans BDD)
 |---|---|---|
 | OMR (image → notes) | 🔴 Élevée — **risque principal** | Audiveris (open source, MusicXML). Alternatives : homr, oemer. |
 | Assemblage multi-pages | 🟠 Moyenne | Audiveris traite un « book » multi-images. Sinon, raccord des parties par position (rang de portée). |
-| Lecture du tempo | 🟠 Moyenne | Indication métronomique via Audiveris ; mots (Allegro, Andante…) → table de correspondance ; sinon 100 BPM. |
+| Durées / rythme | 🟠 Moyenne — **critère de réussite** | Lues dans le MusicXML (`duration` ÷ `divisions`). Contrôle automatique : la somme des durées de chaque mesure doit retomber sur la métrique. |
 | Séparation des lignes | 🟢 Faible | Native dans MusicXML (parties / portées). |
 | Transposition | 🟢 Faible | Décalage MIDI en demi-tons à la lecture. |
+| Tempo | 🟢 Faible | Curseur partant de 100 BPM. Aucune lecture sur la partition. |
 | Synthèse / lecture | 🟢 Faible | Tone.js + échantillons. |
 | Export JSON / WAV | 🟢 Faible | Entièrement côté navigateur. |
 | PWA hors ligne | 🟢 Faible | Manifest + service worker. |
@@ -66,6 +71,7 @@ Serveur Node.js (Docker, sans état, sans BDD)
 ### Contraintes d'hébergement
 - Audiveris (Java) : prévoir **1–2 Go de RAM**. Petit VPS, Fly.io ou Render conviennent.
 - Analyse : ~10–30 s par page → traitement asynchrone (job + interrogation périodique du statut) et progression par page.
+- Une image = une page : pas de découpage à faire côté serveur.
 - Serveur volatile : aucune donnée conservée ; tout ce qui doit durer passe par le fichier projet.
 
 ## 4. Fichier projet (JSON)
@@ -81,8 +87,7 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
   "score": {
     "pages": 2,
     "timeSignature": [4, 4],
-    "key": "C",
-    "detectedTempo": 96
+    "key": "C"
   },
   "settings": { "tempo": 110, "transpose": 2, "loop": false },
   "parts": [
@@ -98,7 +103,8 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 }
 ```
 
-- `start` et `duration` en temps (noires) ; `pitch` en notation scientifique (silences implicites).
+- `start` et `duration` en temps (noires) ; `pitch` en notation scientifique (silences implicites). Ces deux champs sont le cœur du format : tout le reste est du confort.
+- Pas de tempo détecté dans le fichier : `settings.tempo` vaut 100 tant que l'utilisateur ne l'a pas changé.
 - `version` permet de faire évoluer le format sans casser les anciens fichiers.
 - Validation au chargement ; message clair si le fichier est invalide ou d'une version inconnue.
 
@@ -117,7 +123,7 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 | 2 | Serveur | API d'upload multi-pages, jobs asynchrones, Audiveris, assemblage, conversion MusicXML → JSON, Dockerfile. | 3–4 j |
 | 3 | Front PWA | Import, analyse, affichage, lecture, réglages. | 4–5 j |
 | 4 | Sauvegarde | Export/import JSON, export WAV, partage mobile. | 1–2 j |
-| 5 | Finitions | PWA hors ligne, déploiement, gestion des erreurs, tempo en toutes lettres. | 1–2 j |
+| 5 | Finitions | PWA hors ligne, déploiement, gestion des erreurs. | 1–2 j |
 
 ### État d'avancement
 
@@ -125,13 +131,19 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 - **Étape 1** : banc de test OMR disponible dans [v0/](v0/README.md) (serveur Node sans dépendance + Audiveris 5.11 extrait localement). Premiers enseignements :
   - ~6–10 s par page sur un poste de développement ;
   - les images du web sont souvent sous l'interligne minimal d'Audiveris → **agrandissement automatique indispensable** (intégré à la v0) ;
-  - l'OCR (titres, tempo en toutes lettres) exige les modèles Tesseract « standard », pas « fast » ;
-  - des erreurs réelles apparaissent (ex. clé de fa lue en clé de sol) : la correction manuelle (V2) prendra de la valeur.
+  - l'OCR (titres) exige les modèles Tesseract « standard », pas « fast » ;
+  - des erreurs réelles apparaissent (ex. clé de fa lue en clé de sol) : la correction manuelle (V2) prendra de la valeur ;
+  - **un scan contenant deux pages côte à côte est inexploitable** : sur « Over The Rainbow » (3508×2480, deux pages en vis-à-vis), Audiveris a reconstruit 17 systèmes dont neuf à une seule portée au lieu de 8 systèmes de 3 portées, inventé une troisième partie et produit des mesures vides. Les deux moitiés analysées séparément donnent 4 systèmes de 3 portées chacune, 2 parties, 17 + 15 mesures conformes à la partition ;
+  - **même bien découpée, une page garde des durées fausses** : sur ces deux moitiés, 5 mesures sur 17 et 5 sur 15 ne totalisent pas 4 temps (mesures à 5 temps dans le piano, et une mesure où la partie de chant est totalement vide). D'où le **contrôle automatique des durées** ajouté à la v0 : c'est lui qui dit si une page est utilisable, pas l'œil sur la partition reconstruite.
 - **Décision** : le serveur sera en **Node.js** (et non FastAPI) — une seule stack JS, la lecture du MusicXML est déjà faite côté JS dans la v0.
+- **Décision** : **une image = une page**, le découpage se fait au scan. Détecter la gouttière automatiquement coûterait plus cher que le problème qu'il résout.
+- **Décision** : **le tempo n'est pas analysé** — 100 BPM au départ, réglés à l'oreille. L'effort porte sur les hauteurs et les durées.
 
 ## 7. Hors V1 (pistes V2)
 
 - Import PDF.
+- Découpage automatique des scans contenant deux pages en vis-à-vis.
+- Lecture automatique du tempo (indication métronomique, ou en toutes lettres via OCR).
 - Export MIDI / MP3.
 - Correction manuelle des notes mal reconnues.
 - Affichage de la partition transposée.
@@ -142,6 +154,8 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 | Risque | Mitigation |
 |---|---|
 | Qualité OMR insuffisante sur certaines partitions | Étape 1 de test avant développement ; alternatives (homr, oemer) ; correction manuelle en V2. |
+| Rythme faux alors que les hauteurs sont bonnes | Contrôle automatique des durées mesure par mesure, affiché dès l'analyse : l'utilisateur sait quelles mesures se méfier. |
+| Image contenant deux pages | Avertissement à l'import quand l'image est plus large que haute. |
 | Lignes incohérentes entre pages | Raccord par position + avertissement à l'utilisateur. |
 | Temps d'analyse / mémoire serveur | Jobs asynchrones, une analyse à la fois, dimensionnement 2 Go. |
 | Téléchargement de fichiers sur iOS en PWA | Web Share API en priorité. |

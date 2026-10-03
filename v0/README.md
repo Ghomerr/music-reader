@@ -4,15 +4,30 @@ Page simple pour vérifier, sur de vraies partitions, si la reconnaissance d'Aud
 
 ## Ce que fait la v0
 
-- Envoi d'**une ou plusieurs pages** (PNG/JPG), dans l'ordre choisi.
+- Envoi d'**une ou plusieurs pages** (PNG/JPG), dans l'ordre choisi — **une page de partition par image** (voir ci-dessous).
 - Analyse de chaque page par **Audiveris 5.11** en ligne de commande, l'une après l'autre.
 - Si l'image est en trop basse résolution (interligne trop petit), **agrandissement automatique** puis nouvel essai. On peut aussi forcer ×1,5 / ×2 / ×3 et relancer une page.
 - **Comparaison côte à côte** : image d'origine / partition reconstruite (MusicXML affiché avec OpenSheetMusicDisplay), journal Audiveris, téléchargement du MusicXML.
+- **Contrôle du rythme** : pour chaque mesure, la somme des durées doit retomber sur la métrique. Les mesures qui n'y retombent pas sont listées — ce sont celles qui sonneront faux.
+- **Répartition des durées** lues (rondes, blanches, noires, croches…), pour vérifier d'un coup d'œil que les figures sont bien reconnues.
 - **Verdict par page** (bon / erreurs mineures / inutilisable + commentaire) et **bilan** en tableau Markdown à copier.
-- **Écoute** de la musique assemblée : choix des lignes (par portée, ou par voix), tempo lu ou 100 par défaut, transposition, lecture.
+- **Écoute** de la musique assemblée : choix des lignes (par portée, ou par voix), transposition, lecture.
 - **Export JSON** au format du plan (rechargeable dans la maquette).
 
 Hors périmètre : reprises / D.C. / coda, nuances, PDF, interface mobile soignée.
+
+## Deux partis pris
+
+**Une image = une page.** Audiveris cherche les systèmes sur toute la largeur de l'image. Un scan de recueil
+où deux pages se font face est donc mélangé : sur « Over The Rainbow » (3508×2480), il a reconstruit 17 systèmes
+dont neuf à une seule portée au lieu de 8 systèmes de 3 portées, inventé une troisième partie et produit des
+mesures vides. Les deux moitiés analysées séparément donnent chacune 4 systèmes de 3 portées et 2 parties.
+Le découpage se fait **au scan**, pas dans l'outil ; la v0 se contente d'afficher un avertissement quand une
+image est plus large que haute.
+
+**Le tempo n'est pas analysé.** La lecture démarre toujours à 100 BPM et se règle à l'oreille. Ce qui compte
+ici, c'est que les **hauteurs** et les **durées** soient justes : un tempo approximatif se corrige d'un curseur,
+une croche lue comme une noire, non.
 
 ## Installation (Windows)
 
@@ -57,5 +72,7 @@ server.mjs (Node, sans dépendance)
 |---|---|
 | Yankee Doodle (piano 2 portées, 1075×239) | Analysée en ~6 s. Mesures et rythme cohérents à première vue, mais **clé de fa de la basse lue comme une clé de sol** : la basse sonne à la mauvaise hauteur. |
 | Bach BWV 1052, adagio (1820×232) | Rejetée telle quelle (interligne 10 px). **Agrandie ×2 automatiquement** : analysée en ~9 s, 7 mesures, armure à 2 bémols correcte. |
+| Over The Rainbow, scan de deux pages en vis-à-vis (3508×2480) | **Inexploitable telle quelle** : 17 systèmes au lieu de 8, une partie en trop, mesures vides. Découpée en deux : 4 systèmes de 3 portées par page, 2 parties, 17 + 15 mesures conformes. Restent **5 mesures sur 17 et 5 sur 15 dont les durées ne tombent pas juste** (mesures à 5 temps au piano, une mesure de chant vide) : structure correcte, rythme encore à surveiller. |
 
 Les images trouvées sur internet sont souvent en basse résolution : l'agrandissement automatique est indispensable.
+Et un scan de deux pages doit être coupé en deux avant d'être envoyé.
