@@ -13,6 +13,11 @@
 .an-table tr.an-best td{background:var(--ok-soft);color:var(--ok)}
 .an-page{display:flex;flex-direction:column;gap:4px}
 .an-head{gap:8px}
+/* en-tête repliable : le titre et son chevron forment un seul bouton */
+.an-fold{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:2px 6px 2px 2px;margin-left:-2px}
+.an-fold:hover{background:var(--surface-2)}
+.an-fold:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.an-chevron{display:inline-block;width:14px;text-align:center;color:var(--muted);font-size:13px}
 .an-rerun{gap:8px;margin-top:6px;font-size:14px}
 .an-cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
 @media (max-width:1000px){.an-cmp{grid-template-columns:1fr}}

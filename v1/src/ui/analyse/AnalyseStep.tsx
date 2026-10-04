@@ -9,6 +9,7 @@ import { setState, useStore, type Calibration, type PageState } from '../../stat
 import { FONT_LABELS, isBusy, isSpread, rerunAllWithFont, rerunPage, validateFont } from '../../analysis/run';
 import { OsmdView } from '../common/OsmdView';
 import { StatusBadge } from '../import/ImportStep';
+import { FoldHead, setFolded, useAllFolded, useFolded } from './fold';
 import './AnalyseStep.css';
 
 const secs = (ms?: number) => `${((ms || 0) / 1000).toFixed(1).replace('.', ',')} s`;
@@ -44,8 +45,15 @@ export function AnalyseStep() {
   const { issues, error } = useMemo(() => safeIssues(project), [project]);
   const lineOrder = useMemo(() => (project ? staffOrder(project) : []), [project]);
 
+  // toutes les zones repliables de l'étape (pour « Tout replier / Tout déplier »)
+  const foldIds = useMemo(() => [
+    'progress', ...(calibration.status !== 'idle' ? ['calibration'] : []), ...(project ? ['summary'] : []),
+    ...pages.map(p => 'page:' + p.key),
+  ], [calibration.status, project, pages]);
+
   return (
     <>
+      <StepNav busy={busy} canGo={!!project} foldIds={foldIds} />
       <Progress pages={pages} busy={busy} />
       {calibration.status !== 'idle' && <CalibrationPanel c={calibration} busy={busy} />}
       {project && <Summary project={project} issues={issues} pages={pages.length} />}
@@ -54,13 +62,27 @@ export function AnalyseStep() {
       {pages.map((p, i) => (
         <PageCard key={p.key} p={p} index={i} project={project} issues={issues} lineOrder={lineOrder} />
       ))}
-      <div className="row">
-        <button className="btn" onClick={() => setState({ step: 'import' })}>← Pages</button>
-        <span className="spacer" />
-        {busy && <small><span className="spin" /> analyse en cours…</small>}
-        <button className="btn primary" disabled={!project} onClick={() => setState({ step: 'score' })}>Relire et écouter →</button>
-      </div>
+      <StepNav busy={busy} canGo={!!project} />
     </>
+  );
+}
+
+/** Navigation de l'étape, en haut et en bas : pas besoin de descendre tout en bas pour passer à la suite. */
+function StepNav({ busy, canGo, foldIds }: { busy: boolean; canGo: boolean; foldIds?: string[] }) {
+  const allFolded = useAllFolded(foldIds ?? []);
+  return (
+    <div className="row">
+      <button className="btn" onClick={() => setState({ step: 'import' })}>← Pages</button>
+      {foldIds && foldIds.length > 0 && (
+        <button className="btn" onClick={() => setFolded(foldIds, !allFolded)}
+                title="Replier les zones déjà lues pour ne garder que leurs en-têtes">
+          {allFolded ? '▾ Tout déplier' : '▸ Tout replier'}
+        </button>
+      )}
+      <span className="spacer" />
+      {busy && <small><span className="spin" /> analyse en cours…</small>}
+      <button className="btn primary" disabled={!canGo} onClick={() => setState({ step: 'score' })}>Relire et écouter →</button>
+    </div>
   );
 }
 
@@ -69,16 +91,16 @@ export function AnalyseStep() {
 function Progress({ pages, busy }: { pages: PageState[]; busy: boolean }) {
   const done = pages.filter(p => p.status === 'done').length;
   const failed = pages.filter(p => p.status === 'error').length;
+  const folded = useFolded('progress');
   return (
     <section className="card">
-      <div className="row">
-        <h2 style={{ margin: 0 }}>Analyse</h2>
+      <FoldHead id="progress" title="Analyse" level={2}>
         <span className="badge">{done} / {pages.length} page{pages.length > 1 ? 's' : ''} analysée{done > 1 ? 's' : ''}</span>
         {failed > 0 && <span className="badge err">{failed} en échec</span>}
         {busy && <span className="spin" />}
-      </div>
+      </FoldHead>
       <div className="an-bar" aria-hidden><i style={{ width: `${pages.length ? (done + failed) / pages.length * 100 : 0}%` }} /></div>
-      <ol className="an-progress">
+      {!folded && <ol className="an-progress">
         {pages.map((p, i) => (
           <li key={p.key}>
             <b>{i + 1}</b>
@@ -88,7 +110,7 @@ function Progress({ pages, busy }: { pages: PageState[]; busy: boolean }) {
             {p.status === 'error' && p.error && <small className="an-err">{p.error}</small>}
           </li>
         ))}
-      </ol>
+      </ol>}
     </section>
   );
 }
@@ -102,9 +124,15 @@ function CalibrationPanel({ c, busy }: { c: Calibration; busy: boolean }) {
   useEffect(() => setOther(current), [current]);
   const list = fonts.length ? fonts : Object.keys(FONT_LABELS);
   const ranked = c.trials.filter(t => t.status === 'done');
+  const folded = useFolded('calibration');
   return (
     <section className="card">
-      <h3>Choix de la police</h3>
+      <FoldHead id="calibration" title="Choix de la police">
+        {c.status === 'running' && <span className="spin" />}
+        {c.validated ? <span className="badge ok">police retenue : {current}</span>
+          : c.best ? <span className="badge warn">proposée : {c.best}</span> : null}
+      </FoldHead>
+      {!folded && <>
       <small>
         Audiveris compare les têtes de notes aux dessins d'une police de référence. Les premières mesures de la page 1
         ont été analysées avec chacune ; la note favorise les mesures bien remplies et pénalise les mesures fausses ou
@@ -159,6 +187,7 @@ function CalibrationPanel({ c, busy }: { c: Calibration; busy: boolean }) {
           <button className="btn sm" disabled={busy} onClick={() => void rerunAllWithFont(other)}>Relancer toutes les pages</button>
         </div>
       )}
+      </>}
     </section>
   );
 }
@@ -183,9 +212,14 @@ function Summary({ project, issues, pages }: { project: Project; issues: Issue[]
       flagged,
     };
   }, [project, issues]);
+  const folded = useFolded('summary');
   return (
     <section className="card">
-      <h3>Partition assemblée</h3>
+      <FoldHead id="summary" title="Partition assemblée">
+        {folded && <span className="badge">{project.measures.length} mesures</span>}
+        {folded && <span className={'badge ' + (facts.flagged ? 'err' : 'ok')}>{facts.flagged} signalée{facts.flagged > 1 ? 's' : ''}</span>}
+      </FoldHead>
+      {!folded && <>
       <div className="facts">
         <div className="fact"><small>Pages</small><b>{project.pages.length} / {pages}</b></div>
         <div className="fact"><small>Lignes</small><b>{project.lines.length}</b></div>
@@ -196,6 +230,7 @@ function Summary({ project, issues, pages }: { project: Project; issues: Issue[]
         <div className="fact"><small>Mesures signalées</small><b className={facts.flagged ? 'an-err' : ''}>{facts.flagged}</b></div>
       </div>
       <small>Durées : {facts.durs}</small>
+      </>}
     </section>
   );
 }
@@ -261,10 +296,10 @@ const PageCard = memo(function PageCard({ p, index, project, issues, lineOrder }
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   };
 
+  const folded = useFolded('page:' + p.key);
   return (
     <section className="card an-page">
-      <div className="row an-head">
-        <h3 style={{ margin: 0 }}>Page {index + 1}</h3>
+      <FoldHead id={'page:' + p.key} title={`Page ${index + 1}`}>
         <span className="muted an-pname" title={p.name}>{p.name}</span>
         <StatusBadge p={p} />
         {p.status === 'done' && p.job && <span className="badge">{secs(p.job.elapsedMs)}</span>}
@@ -277,8 +312,9 @@ const PageCard = memo(function PageCard({ p, index, project, issues, lineOrder }
         {nMeasures != null && <span className="badge">{nMeasures} mesures</span>}
         {range && (flagged ? <span className="badge err">{flagged} mesure{flagged > 1 ? 's' : ''} à vérifier</span>
                            : <span className="badge ok">rythme cohérent</span>)}
-      </div>
+      </FoldHead>
 
+      {!folded && <>
       {p.file && (
         <div className="row an-rerun">
           <label>Police{' '}
@@ -365,6 +401,7 @@ const PageCard = memo(function PageCard({ p, index, project, issues, lineOrder }
           <pre>{p.job.log.join('\n')}</pre>
         </details>
       )}
+      </>}
     </section>
   );
 });

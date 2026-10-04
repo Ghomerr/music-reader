@@ -16,6 +16,8 @@ réimprime une partition propre. Voir [PLAN.md](../PLAN.md) pour le cadrage.
    - Pour chaque page : image d'origine et partition reconstruite côte à côte, mesures signalées, journal
      Audiveris, MusicXML brut.
    - Résumé de la partition assemblée : lignes, mesures, notes, répartition des durées, tonalité, métrique.
+   - Chaque zone (progression, choix de la police, résumé, chaque page) se replie sur son en-tête une fois lue,
+     ou toutes d'un coup ; « Relire et écouter → » figure en haut comme en bas de l'étape.
 3. **Relire et écouter** — la partition entière, mesures douteuses en couleur :
    - orange : rythme faux, trou dans la mesure, ou note vue par Audiveris puis jetée (lue dans son journal) ;
    - rouge : mesure vide ;
