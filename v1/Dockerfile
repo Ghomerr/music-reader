@@ -13,6 +13,8 @@ RUN npm ci
 COPY index.html vite.config.ts tsconfig.json ./
 COPY public ./public
 COPY src ./src
+# tsc -b vérifie aussi les tests, dont l'un lit le découpage des pages avec server/omr.mjs
+COPY server ./server
 RUN npm run build
 
 # ---------- 2. Exécution : Ubuntu 24.04 (paquet officiel d'Audiveris) + Node 20 ----------
@@ -36,7 +38,10 @@ RUN apt-get update \
  # options Java du lanceur (fichier .cfg de jpackage) : mémoire réglée par AUDIVERIS_HEAP
  && CFG="$(dpkg -L "$PKG" | grep -E '/Audiveris\.cfg$' | head -n 1)" \
  && test -n "$CFG" \
- && sed -i -e 's/^java-options=-Xms.*/java-options=-Xms64m/' -e "s/^java-options=-Xmx.*/java-options=-Xmx${AUDIVERIS_HEAP}/" "$CFG" \
+ # (on retire les -Xms/-Xmx existants, puis on insère les nôtres sous [JavaOptions], créée au besoin)
+ && sed -i -e '/^java-options=-Xm[sx]/d' "$CFG" \
+ && { grep -q '^\[JavaOptions\]' "$CFG" || printf '[JavaOptions]\n' >> "$CFG"; } \
+ && sed -i "/^\[JavaOptions\]/a java-options=-Xms64m\njava-options=-Xmx${AUDIVERIS_HEAP}" "$CFG" \
  && grep -E '^java-options=-Xm' "$CFG" \
  && rm -f /tmp/audiveris.deb \
  && rm -rf /var/lib/apt/lists/*
