@@ -400,8 +400,8 @@ function parseV1(d: Obj): Project {
 export function parseProject(text: string): Project {
   let d: unknown;
   try { d = JSON.parse(text); }
-  catch { throw new Error('Ce fichier n\'est pas un projet Music Reader : son contenu n\'est pas du JSON valide.'); }
-  if (!isObj(d) || d.format !== 'music-reader') throw new Error('Ce fichier n\'est pas un projet Music Reader.');
+  catch { throw new Error('Ce fichier n\'est pas un projet Lect\'O\'Note Matic 3000 : son contenu n\'est pas du JSON valide.'); }
+  if (!isObj(d) || d.format !== 'music-reader') throw new Error('Ce fichier n\'est pas un projet Lect\'O\'Note Matic 3000.');
   if (d.version === 2) return parseV2(d);
   if (d.version === 1) return parseV1(d);
   throw new Error(`Fichier projet : version ${String(d.version)} non prise en charge.`);

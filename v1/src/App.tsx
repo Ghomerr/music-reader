@@ -48,7 +48,7 @@ export function App() {
       <header className="app-header">
         <div className="app-bar">
           <div className="brand">
-            🎼 Music Reader <span className="badge">v1</span>
+            🎼 Lect'O'Note Matic 3000 <span className="badge">v1</span>
             <a className="twitter" href="https://twitter.com/Ghomerr" target="_blank" rel="noopener noreferrer"
                title="@Ghomerr sur Twitter" aria-label="@Ghomerr sur Twitter">
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">

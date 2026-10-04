@@ -2,7 +2,7 @@
 // But : l'application s'ouvre et joue hors ligne (relecture, écoute, impression, export) ; seule l'analyse
 // exige le serveur. Changer VERSION à chaque évolution de ce fichier ou de la liste PRECACHE : l'activation
 // supprime alors les caches des versions précédentes.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const PREFIX = 'music-reader-';
 const CACHE = PREFIX + VERSION;
 const PRECACHE = ['/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png'];
@@ -95,7 +95,7 @@ async function networkFirst(req) {
 
 function offlinePage() {
   return new Response(
-    '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Music Reader</title>'
-    + '<p style="font:16px system-ui;padding:24px">Hors ligne : Music Reader n’a pas encore été ouvert avec une connexion sur cet appareil.</p>',
+    '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Lect’O’Note Matic 3000</title>'
+    + '<p style="font:16px system-ui;padding:24px">Hors ligne : Lect’O’Note Matic 3000 n’a pas encore été ouvert avec une connexion sur cet appareil.</p>',
     { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }

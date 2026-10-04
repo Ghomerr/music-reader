@@ -1,4 +1,4 @@
-# Music Reader — v1
+# Lect'O'Note Matic 3000 — v1
 
 Application complète, construite sur les enseignements de la [v0](../v0/README.md) : on importe les pages
 d'une partition, Audiveris les reconnaît, on relit et corrige ce qui a été mal lu, on écoute, puis on
@@ -55,7 +55,10 @@ Trois **modes** exclusifs disent ce que fait un clic sur la portée, pour qu'il 
   On la recale en déplaçant ses accords et en les passant en voix 2 : chaque voix retombe sur la métrique.
 - **« ✂ Ramener à 4/4 »** (par ligne, ou pour toute la mesure) : coupe ce qui dépasse la barre de mesure, quand
   le contenu en trop est vraiment de trop.
-- **Paroles** : un champ sous chaque note ; un trait d'union final (« Là- ») lie la syllabe à la suivante.
+- **Paroles** : un champ sous chaque note ; un trait d'union final (« Là- ») lie la syllabe à la suivante. Tous
+  les couplets s'affichent ensemble, une rangée numérotée par couplet. « + couplet » ouvre une rangée vide ;
+  « n ✕ » supprime le couplet n dans toute la partition (annulable), les suivants remontant d'un cran : sur une
+  partition qui imprime deux langues, on ne garde ainsi qu'une ligne de texte.
 - « Écouter la mesure », « Marquer comme vérifiée », mesure précédente / suivante (PgPréc / PgSuiv).
 - Raccourcis : 1–6 pour les figures, « . » pour le point, flèches, Suppr, Échap. **Ctrl+Z / Ctrl+Y** annulent et
   rétablissent les corrections (pas les réglages d'écoute).

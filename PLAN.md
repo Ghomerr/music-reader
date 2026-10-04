@@ -1,4 +1,6 @@
-# Music Reader — Plan du projet
+# Lect'O'Note Matic 3000 — Plan du projet
+
+*(Nom de code du dépôt et du format de fichier : `music-reader`.)*
 
 Application qui lit une partition à partir d'images, en extrait les notes et les joue par synthèse, avec réglage du tempo, transposition et choix des lignes musicales.
 

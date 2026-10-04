@@ -63,8 +63,8 @@ describe('fichier projet v2', () => {
   test('erreurs claires', () => {
     const ok = JSON.parse(serializeProject(small()));
     const bad = (f: (d: typeof ok) => void) => { const d = structuredClone(ok); f(d); return () => parseProject(JSON.stringify(d)); };
-    expect(() => parseProject('{pas du json')).toThrow('n\'est pas un projet Music Reader : son contenu n\'est pas du JSON valide');
-    expect(() => parseProject('{"format":"autre"}')).toThrow('Ce fichier n\'est pas un projet Music Reader.');
+    expect(() => parseProject('{pas du json')).toThrow('n\'est pas un projet Lect\'O\'Note Matic 3000 : son contenu n\'est pas du JSON valide');
+    expect(() => parseProject('{"format":"autre"}')).toThrow('Ce fichier n\'est pas un projet Lect\'O\'Note Matic 3000.');
     expect(() => parseProject('{"format":"music-reader","version":3}')).toThrow('Fichier projet : version 3 non prise en charge.');
     expect(bad(d => { d.lines[0].notes[1].pitch = 'H4'; })).toThrow('Fichier projet invalide : lines[0].notes[1].pitch : hauteur « H4 » illisible');
     expect(bad(d => { d.lines[0].notes[0].measure = 9; })).toThrow('Fichier projet invalide : lines[0].notes[0].measure doit être un entier ≥ 0 et ≤ 1.');

@@ -1,6 +1,6 @@
 {
-  "name": "Music Reader",
-  "short_name": "Music Reader",
+  "name": "Lect'O'Note Matic 3000",
+  "short_name": "Lect'O'Note",
   "description": "Lecture de partitions à partir d'images : reconnaissance, relecture et correction, écoute, impression.",
   "lang": "fr",
   "dir": "ltr",
