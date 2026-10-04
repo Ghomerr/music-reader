@@ -1,0 +1,69 @@
+/* Styles communs. Chaque composant a sa propre feuille (importée par lui) pour ce qui lui est propre. */
+:root{
+  --bg:#f6f5f2; --surface:#fff; --surface-2:#f0eee9; --ink:#1d1d1f; --muted:#6b6b72; --line:#e2dfd8;
+  --accent:#4f46e5; --accent-ink:#fff; --accent-soft:#eceafe; --ok:#15803d; --ok-soft:#e6f4ea;
+  --warn:#9a5b06; --warn-soft:#fdf3e1; --err:#b42318; --err-soft:#fdecea;
+  /* couleurs de diagnostic sur la partition (jamais imprimées) */
+  --diag-rhythm:#e8590c; --diag-empty:#d6336c; --diag-checked:#64748b;
+  --paper:#fffdf8; --paper-ink:#222;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#131316; --surface:#1c1c21; --surface-2:#26262d; --ink:#ececf1; --muted:#9a9aa4; --line:#33333c;
+    --accent:#8b85ff; --accent-ink:#121216; --accent-soft:#2a2850; --ok:#4ade80; --ok-soft:#163222;
+    --warn:#fbbf24; --warn-soft:#3a2e12; --err:#f87171; --err-soft:#3b1a1a;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,select,input,textarea{font:inherit;color:inherit}
+h2{margin:0 0 6px;font-size:19px}
+h3{margin:0 0 8px;font-size:15px}
+.muted,small{color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:inherit}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.sm{padding:3px 9px;font-size:13px;border-radius:8px}
+.btn.sel{border-color:var(--accent);background:var(--accent-soft)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+select,input[type=number],input[type=text],textarea{padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface)}
+input[type=range],input[type=checkbox]{accent-color:var(--accent)}
+.badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.err{background:var(--err-soft);color:var(--err)}
+.badge.run{background:var(--accent-soft);color:var(--accent)}
+.note{border-radius:10px;padding:8px 12px;font-size:14px;margin:8px 0}
+.note.warn{background:var(--warn-soft);color:var(--warn)}
+.note.err{background:var(--err-soft);color:var(--err)}
+.note.info{background:var(--surface-2);color:var(--muted)}
+.note.ok{background:var(--ok-soft);color:var(--ok)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:10px 0}
+.fact{background:var(--surface-2);border-radius:10px;padding:8px 10px}
+.fact small{display:block}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.paper{background:var(--paper);color:var(--paper-ink);border-radius:10px;border:1px solid var(--line);overflow:auto}
+[hidden]{display:none!important}
+
+/* ---------- Coquille ---------- */
+.app-header{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+.app-bar{max-width:1400px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px}
+.steps{display:flex;gap:6px;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:14px;background:none;cursor:pointer}
+.step b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);font-size:12px}
+.step:disabled{cursor:default;opacity:.55}
+.step.cur{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.step.cur b{background:var(--accent);color:var(--accent-ink)}
+.app-main{max-width:1400px;margin:0 auto;padding:16px 16px 60px;display:flex;flex-direction:column;gap:16px}
+
+@media print{
+  .app-header,.no-print{display:none!important}
+  html,body{background:#fff;color:#000}
+  .app-main{padding:0;max-width:none}
+}

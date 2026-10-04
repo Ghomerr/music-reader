@@ -1,0 +1,51 @@
+/* Panneau d'écoute (colonne latérale de l'étape « Relire et écouter »). */
+.pl{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pl .card{padding:14px 16px}
+.pl h3{margin:0 0 8px}
+.pl-head{justify-content:space-between;margin-bottom:8px}
+.pl-head h3{margin:0}
+.pl-cap{display:block;margin-top:8px;font-size:13px}
+.pl-full{width:100%}
+.pl-btns{gap:6px;margin-top:8px}
+.pl-push{margin-left:auto}
+
+/* Transport */
+.pl-transport{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.pl-play{width:52px;height:52px;border-radius:50%;border:none;background:var(--accent);color:var(--accent-ink);font-size:20px;cursor:pointer;display:grid;place-items:center;flex:none}
+.pl-play:hover{filter:brightness(1.08)}
+.pl-play:disabled{opacity:.4;cursor:not-allowed}
+.pl-round{width:38px;height:38px;border-radius:50%;padding:0;justify-content:center;font-size:17px;flex:none}
+.pl-chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
+.pl-prog{height:10px;border-radius:5px;background:var(--surface-2);cursor:pointer;position:relative;overflow:hidden}
+.pl-prog:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pl-prog i{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent);border-radius:5px}
+.pl-prog-info{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+
+/* Lignes */
+.pl-line{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:6px}
+.pl-line.off{opacity:.55}
+.pl-line-head{display:flex;align-items:center;gap:8px;cursor:pointer}
+.pl-line-head input{width:17px;height:17px;flex:none}
+.pl-sw{width:12px;height:12px;border-radius:3px;flex:none}
+.pl-lbl{display:flex;flex-direction:column;line-height:1.25;flex:1;min-width:0}
+.pl-lbl b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.pl-lbl small{font-size:12px}
+.pl-line-ctrl{display:flex;gap:8px;align-items:center;margin-top:6px;padding-left:25px}
+.pl-line-ctrl select{flex:1;min-width:0;padding:3px 6px}
+.pl-line-ctrl input[type=range]{width:90px;flex:none}
+
+/* Tempo */
+.pl-tempo{display:flex;align-items:baseline;gap:6px;margin:4px 0 6px}
+.pl-tempo-sym{font-size:20px}
+.pl-tempo input{width:76px;font-size:20px;font-weight:700;padding:2px 6px}
+
+/* Tonalité */
+.pl-stepper{display:flex;align-items:center;gap:8px}
+.pl-val{flex:1;text-align:center;min-width:0}
+.pl-val b{display:block;font-size:16px;line-height:1.25}
+.pl-val small{display:block;font-size:12px}
+
+/* Exports */
+.pl-export{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pl-export .btn{justify-content:center}
+.pl progress{margin-top:8px;height:8px;accent-color:var(--accent)}

@@ -1,0 +1,6 @@
+/* La partition reste noire sur papier blanc, même en thème sombre : c'est une page, pas une interface. */
+.osmd-view{position:relative;background:#fff;color:#111;border-radius:10px;border:1px solid var(--line);overflow:auto}
+.osmd-host{min-height:120px;padding:4px 0}
+.osmd-host svg{display:block}
+.osmd-loading{position:absolute;top:10px;left:14px;font-size:14px;color:#555}
+.osmd-view > .note{margin:10px}

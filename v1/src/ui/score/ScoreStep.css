@@ -1,0 +1,99 @@
+/* ---------- Étape « Relire et écouter » ---------- */
+.score-step{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+.score-step.editing{padding-bottom:calc(62vh + 16px)}
+.score-main{min-width:0}
+.score-side{position:sticky;top:64px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 76px);overflow:auto}
+.score-card{padding:14px}
+.score-bar{margin-bottom:6px}
+.score-bar h2{margin:0}
+.score-bar label{display:inline-flex;gap:6px;align-items:center;font-size:14px}
+.zoom{gap:4px}
+.zoom-val{font-size:13px;min-width:44px;text-align:center;color:var(--muted)}
+.score-hint{justify-content:space-between;margin-bottom:8px}
+/* la mesure amenée à l'écran ne doit pas finir sous le tiroir de l'éditeur */
+.score-step .osmd-target{scroll-margin:80px 0 calc(62vh + 24px)}
+
+@media (max-width:1000px){
+  .score-step{grid-template-columns:minmax(0,1fr)}
+  .score-side{position:static;max-height:none;order:-1}
+  .score-side .issue-groups{max-height:40vh}
+}
+
+/* ---------- Légende et diagnostics ---------- */
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px}
+.sw.rhythm{background:rgba(232,89,12,.35)}
+.sw.empty{background:rgba(214,51,108,.40)}
+.sw.checked{background:rgba(100,116,139,.35)}
+.sw.manual{background:#4f46e5}
+.kind{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.kind.rhythm{background:rgba(232,89,12,.14);color:var(--diag-rhythm)}
+.kind.empty{background:rgba(214,51,108,.14);color:var(--diag-empty)}
+.kind.checked{background:var(--surface-2);color:var(--diag-checked)}
+
+.issues{display:flex;flex-direction:column;gap:10px}
+.issues h3{margin:0}
+.issues-head{gap:6px}
+.issue-groups{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:48vh;overflow:auto}
+.issue-groups li{border:1px solid var(--line);border-radius:10px;padding:6px 8px;display:flex;flex-direction:column;gap:2px}
+.issue-groups li.cur{border-color:var(--accent);background:var(--accent-soft)}
+.issue-measure,.issue{all:unset;cursor:pointer;display:flex;gap:8px;align-items:baseline;border-radius:6px;padding:3px 4px}
+.issue-measure:hover,.issue:hover{background:var(--surface-2)}
+.issue-measure:focus-visible,.issue:focus-visible{outline:2px solid var(--accent)}
+.issue-text{font-size:13px}
+.issue.checked .issue-text{color:var(--muted)}
+
+/* ---------- Éditeur de mesure (tiroir) ---------- */
+.me-drawer{position:fixed;left:0;right:0;bottom:0;z-index:30;height:62vh;display:flex;flex-direction:column;
+  background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -8px 30px rgba(0,0,0,.18)}
+.me-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);
+  max-width:1400px;width:100%;margin:0 auto}
+.me-nav{display:flex;align-items:center;gap:8px;min-width:0}
+.me-nav h3{margin:0;font-size:16px}
+.me-nav h3 small{font-weight:400}
+.me-body{flex:1;overflow:auto;padding:10px 16px 24px;max-width:1400px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.me-top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.me-issues{flex:1 1 260px;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.me-original{margin:0;max-width:100%;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px}
+.me-original canvas{display:block;max-width:100%;max-height:230px;height:auto;width:auto}
+.me-original figcaption{font-size:12px;color:#666;padding:2px 4px 0}
+
+.me-tools{display:flex;flex-direction:column;gap:8px;position:sticky;top:-10px;z-index:2;background:var(--surface);padding:8px 0;border-bottom:1px solid var(--line)}
+.me-palette{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.btn.fig{min-width:44px;min-height:44px;justify-content:center;padding:4px 8px}
+.fig-txt{font-size:20px;line-height:1}
+.me-current{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-left:6px}
+.me-opts{font-size:14px;gap:14px}
+.me-opts label{display:inline-flex;align-items:center;gap:6px}
+.me-selbar{min-height:34px;gap:6px}
+.me-sel{font-weight:600;font-size:14px;margin-right:4px}
+.btn.danger{color:var(--err)}
+
+.me-line{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.me-line.active{border-color:var(--accent)}
+.me-line-head{gap:8px;font-size:14px}
+.me-line-head .dot{display:inline-block;width:10px;height:10px;border-radius:50%}
+
+/* portée éditable : papier blanc comme la partition */
+.staff-wrap{overflow-x:auto;overflow-y:hidden;max-width:100%;border-radius:8px;background:#fff;padding-bottom:4px}
+.staff-svg{display:block;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair}
+.staff-clef{font-family:"Segoe UI Symbol","Noto Music","Apple Symbols","Bravura Text",serif}
+.staff-lyrics{position:relative}
+.staff-lyric{position:absolute;height:28px;padding:2px 4px!important;font-size:14px;text-align:left;
+  background:#fff!important;color:#222!important;border:1px solid #d8d6e8!important;border-radius:6px!important}
+.staff-lyric.empty{border-style:dashed!important}
+.staff-lyric:focus{outline:2px solid #4f46e5;border-color:#4f46e5!important}
+
+@media (max-width:700px){
+  .me-drawer{height:75vh}
+  .score-step.editing{padding-bottom:calc(75vh + 16px)}
+  .score-step .osmd-target{scroll-margin-bottom:calc(75vh + 24px)}
+  .me-head{padding:6px 10px}
+  .me-body{padding:8px 10px 20px}
+  .me-nav h3 small{display:block}
+  /* sur téléphone, une palette collante mangerait la moitié du tiroir */
+  .me-tools{position:static}
+  .me-original canvas{max-height:200px}
+}
+@media print{ .me-drawer{display:none} }

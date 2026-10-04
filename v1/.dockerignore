@@ -1,0 +1,10 @@
+node_modules
+dist
+jobs
+tools
+*.tsbuildinfo
+.git
+.vscode
+*.log
+Dockerfile
+.dockerignore

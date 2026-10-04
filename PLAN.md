@@ -42,16 +42,19 @@ Application qui lit une partition à partir d'images, en extrait les notes et le
 ```
 PWA (React + TypeScript + Vite)
   ├─ Import multi-pages, réordonnancement
-  ├─ Affichage partition reconstruite (OpenSheetMusicDisplay ou rendu maison)
-  ├─ Lecture : Tone.js + échantillons d'instruments
+  ├─ Analyse : choix automatique de la police sur la page 1, puis pages une à une
+  ├─ Conversion MusicXML → modèle interne, assemblage des pages, contrôle des durées
+  ├─ Relecture et correction (notes, paroles), historique annuler / rétablir
+  ├─ Affichage : modèle → MusicXML → OpenSheetMusicDisplay (écran et impression)
+  ├─ Lecture : synthèse maison (Web Audio), sans échantillons
   ├─ Export JSON / import JSON, export WAV (OfflineAudioContext)
   └─ Service worker : app utilisable hors ligne (hors analyse)
-          │  POST des pages (ordonnées)
+          │  POST d'une page (image brute)
           ▼
-Serveur Node.js (Docker, sans état, sans BDD)
-  ├─ Audiveris (OMR) → MusicXML (un seul livre multi-pages)
-  ├─ Conversion MusicXML → modèle JSON
-  └─ Suppression des fichiers temporaires après traitement
+Serveur Node.js (Docker, sans état, sans BDD, sans dépendance npm)
+  ├─ Audiveris (OMR) → MusicXML, une page à la fois
+  ├─ Lecture du journal (notes vues puis jetées) et de la géométrie de la page (.omr)
+  └─ Suppression des fichiers temporaires après 2 h
 ```
 
 ### Briques et difficulté
@@ -76,7 +79,20 @@ Serveur Node.js (Docker, sans état, sans BDD)
 
 ## 4. Fichier projet (JSON)
 
-Contient la musique analysée et les réglages, sans les images ni le MusicXML. Quelques Ko.
+Contient la musique analysée, les corrections et les réglages, sans les images ni le MusicXML.
+
+**Version 2 (v1 de l'application).** C'est le modèle interne tel quel (`v1/src/model/types.ts`) :
+`{ format, version: 2, title, createdAt, pages[], measures[], lines[], settings, review: { lost[], checked[] } }`.
+
+- Chaque note est rattachée à sa mesure : `{ "measure": 3, "offset": 1.5, "duration": 0.5, "pitch": "Eb4", "voice": 1 }`,
+  plus `tie`, `lyrics` et `manual` s'ils servent. Un silence s'écrit `"pitch": null`. Placer les notes dans leur
+  mesure plutôt qu'en temps absolu fait qu'une mesure fausse ne décale pas toute la suite.
+- `measures[]` garde la page d'origine, le numéro imprimé sur l'original, la métrique et l'armure de chaque mesure.
+- `manual: true` marque une note ou une syllabe corrigée à la main ; `review.checked` liste les mesures validées.
+- Une note par ligne de fichier : le projet reste lisible et se compare bien d'une version à l'autre.
+- Les fichiers de la version 1 ci-dessous (maquette, v0) se rechargent toujours.
+
+**Version 1 (maquette, v0).** Quelques Ko.
 
 ```json
 {
@@ -147,6 +163,12 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 - **Analyser les pages comme un seul livre** permet à Audiveris de reprendre la métrique de la page 1 sur les suivantes (`Time value reused from sheet#1`) ; seul, page par page, il ne peut contrôler aucun rythme sur les pages de suite. Mais quand il ne sait pas placer une note, il la **supprime** et la mesure retombe juste : notre contrôle des durées ne voit alors plus rien. Ce mode n'a de sens que couplé à la lecture du journal.
 - Assombrir l'image avant l'analyse a été essayé : aucune note retrouvée, et un peu plus de mesures fausses. Piste écartée.
 - **Décision** : la v0 lit le journal d'Audiveris et signale les notes qu'il a jetées ; le mode « livre unique » est écarté ; corriger nous-mêmes Audiveris est mis de côté tant que les erreurs restent assez rares pour être reprises à la main.
+- **Étapes 2 à 5 : v1** dans [v1/](v1/README.md). Elle reprend tout le parcours du §2 et intègre dès maintenant quatre pistes prévues pour la V2 : correction manuelle des notes et des paroles, réimpression de la partition, choix des paroles à l'impression, et la fiabilisation sans toucher à Audiveris (journal, choix automatique de la police). Vérifiée de bout en bout dans Edge sur Over The Rainbow (2 pages) : analyse et choix de la police, correction, écoute, aperçu et PDF, export et rechargement du projet. 116 tests automatiques.
+- **Décision** : le **modèle interne fait foi** dès la fin de l'analyse. Le MusicXML d'Audiveris n'est lu qu'une fois ; l'affichage, l'écoute, l'impression et le fichier projet dérivent du modèle, qui est réécrit en MusicXML pour OpenSheetMusicDisplay. C'est ce qui permet à une correction de se propager partout.
+- **Décision** : **police choisie automatiquement sur la première page**, à partir d'un extrait d'au moins 2 systèmes et 4 mesures analysé avec cinq polices (détail et chiffres dans [v1/README.md](v1/README.md#choix-automatique-de-la-police)). Un extrait d'un seul système trompe : Audiveris y calcule ses statistiques sur trop peu de matière. Avec deux systèmes, l'extrait désigne la même police que la page entière sur 6 pages sur 7, pour 42 % de temps en moins. La police retenue est proposée pour les autres pages, à valider.
+- **Une page sortait parfois en deux partitions** : Audiveris prend un système en retrait pour le début d'un nouveau mouvement (Fortunio p1, dont seule l'introduction était lue). La détection est désactivée côté serveur.
+- **Décision** : synthèse maison plutôt que Tone.js et des échantillons : rien à télécharger, fonctionne hors ligne, et le même moteur sert à l'export WAV.
+- **À vérifier au déploiement** : le `Dockerfile` n'a pas pu être testé (Docker absent du poste) ; le son n'a été contrôlé que par des tests et une lecture dans Edge, pas à l'oreille sur plusieurs navigateurs et mobiles.
 
 ## 7. Hors V1 (pistes V2)
 
@@ -154,11 +176,13 @@ Contient la musique analysée et les réglages, sans les images ni le MusicXML. 
 - Découpage automatique des scans contenant deux pages en vis-à-vis.
 - Lecture automatique du tempo (indication métronomique, ou en toutes lettres via OCR).
 - Export MIDI / MP3.
-- **Correction manuelle des notes** — voir ci-dessous.
-- **Correction manuelle des paroles** — voir ci-dessous.
-- **Réimpression de la partition** — voir ci-dessous.
-- **Fiabiliser la reconnaissance**, jusqu'à corriger les bibliothèques si besoin — voir ci-dessous.
 - Recadrage/redressement des photos.
+- Corriger une barre de mesure manquée ou en trop (aujourd'hui : relancer la page avec une autre police).
+- Corriger Audiveris lui-même, si les erreurs se révèlent trop fréquentes — voir « Fiabiliser la reconnaissance ».
+
+**Avancé en V1** (voir [v1/README.md](v1/README.md)) : la correction manuelle des notes et des paroles, la
+réimpression de la partition et la fiabilisation sans toucher à Audiveris. Les sections ci-dessous restent la
+référence de ce qui était attendu.
 
 ### Correction manuelle des notes
 
@@ -205,8 +229,9 @@ Où on en est :
 
 1. **Lire le journal d'Audiveris** — *fait dans la v0.* Le serveur relève les symboles qu'Audiveris a vus sans savoir les placer dans le temps, et la page les rattache à leur mesure et à leur ligne musicale, en orange sur la partition. Limite : Audiveris ne vérifie le rythme que s'il connaît la métrique, donc son journal reste muet sur les pages de suite qui ne la réimpriment pas. Notre contrôle des durées, qui reprend la métrique de la page 1, couvre ces pages-là.
 2. **Analyser toutes les pages comme un seul livre** — *écarté.* La métrique se propage bien, mais Audiveris supprime alors les notes qu'il ne sait pas placer : sur l'essai, la détection n'y gagne rien et une note de plus disparaît.
-3. **Partir d'une meilleure image** — *pas d'original disponible* pour les partitions actuelles, qui sont des photocopies de photocopies. Les erreurs restantes étant peu nombreuses, la correction manuelle s'en chargera.
-4. **Corriger les bibliothèques** — *mis de côté pour l'instant, à reconsidérer si les erreurs se révèlent trop fréquentes à l'usage.* Pour mémoire :
+3. **Choisir la police de référence automatiquement** — *fait dans la v1.* La première page est essayée avec cinq polices sur un extrait de deux systèmes ; la meilleure est proposée pour toutes les pages, à valider.
+4. **Partir d'une meilleure image** — *pas d'original disponible* pour les partitions actuelles, qui sont des photocopies de photocopies. Les erreurs restantes étant peu nombreuses, la correction manuelle s'en chargera.
+5. **Corriger les bibliothèques** — *mis de côté pour l'instant, à reconsidérer si les erreurs se révèlent trop fréquentes à l'usage.* Pour mémoire :
    - **Audiveris** (Java, licence **AGPL-3.0**) : c'est lui qui produit les trois erreurs ci-dessus. On peut le forker et le corriger. Attention à la licence : un Audiveris modifié servi à travers le site oblige à **publier le code source de la version modifiée** à ses utilisateurs. Appeler Audiveris en ligne de commande, comme programme séparé, est généralement considéré comme ne pas étendre l'AGPL au code de notre serveur — à faire confirmer avant la mise en ligne. Coût réel : un gros code Java à prendre en main, et un fork à maintenir à chaque nouvelle version.
    - **OpenSheetMusicDisplay** (TypeScript, licence BSD-3, très permissive) : il ne fait qu'afficher, il n'est pour rien dans les erreurs de reconnaissance. Le forker n'aurait d'intérêt que pour l'affichage (couleurs, saisie des corrections).
    - Avant d'en arriver là, il faudrait d'abord remonter les cas aux mainteneurs d'Audiveris : le projet est actif, et on dispose de cas reproductibles et précis (image, mesure, identifiant de l'objet, étape en cause).

@@ -1,0 +1,39 @@
+/* Étape « Imprimer » : réglages à gauche, aperçu des pages A4 à droite. */
+.print-step{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start}
+.print-options{position:sticky;top:76px;display:flex;flex-direction:column;gap:14px}
+.print-options h2{margin:0;font-size:18px}
+.print-field{display:flex;flex-direction:column;gap:6px;border:0;margin:0;padding:0;min-width:0}
+.print-field>span,.print-field legend{font-weight:600;font-size:14px;padding:0;margin-bottom:2px}
+.print-field input[type=text]{width:100%;box-sizing:border-box}
+.print-check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.print-key{display:flex;flex-direction:column}
+.print-transpose{gap:4px}
+.print-verses{gap:4px 14px}
+.print-actions{display:flex;flex-direction:column;gap:8px}
+.print-actions .btn{justify-content:center}
+
+.print-preview{display:flex;flex-direction:column;gap:10px;min-width:0}
+.print-status .note{margin:0;justify-content:space-between}
+/* Les pages gardent leur largeur réelle (210 mm) : la mise en page ne dépend pas de l'écran. */
+.print-viewport{overflow:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:16px}
+.print-sheet{width:210mm;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.print-sheet>div{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.print-sheet svg{display:block}
+
+@media (max-width:900px){
+  .print-step{grid-template-columns:1fr}
+  .print-options{position:static}
+}
+
+/* Impression : une page OSMD par feuille A4, sans marge, rien d'autre. */
+@page{size:A4;margin:0}
+@media print{
+  .print-step{display:block}
+  .print-viewport{overflow:visible;background:none;border:0;border-radius:0;padding:0}
+  .print-sheet{display:block;width:210mm;margin:0}
+  /* 296 mm plutôt que 297 : un arrondi ne doit pas déborder sur une feuille blanche */
+  .print-sheet>div{width:210mm!important;height:296mm!important;overflow:hidden;margin:0!important;box-shadow:none;
+    break-after:page;page-break-after:always;break-inside:avoid}
+  .print-sheet>div:last-child{break-after:auto;page-break-after:auto}
+  .print-sheet svg{width:100%!important;height:auto!important}
+}
