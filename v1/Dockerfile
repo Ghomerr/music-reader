@@ -26,18 +26,21 @@ ARG AUDIVERIS_VERSION=5.11.0
 ARG AUDIVERIS_HEAP=1g
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Le paquet .deb n'est pas installé par dpkg mais décompressé tel quel : son script de post-installation ne
+# fait qu'intégrer Audiveris au bureau (menu, type de fichier, via xdg-utils) et échoue dans un conteneur sans
+# bureau (« xdg-desktop-menu: No writable system menu directory found »). On installe donc ses dépendances,
+# sauf xdg-utils, puis ses fichiers : lanceur /opt/audiveris/bin/Audiveris, Java embarqué.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl fontconfig \
  && curl -fsSL -o /tmp/audiveris.deb \
       "https://github.com/Audiveris/audiveris/releases/download/${AUDIVERIS_VERSION}/Audiveris-${AUDIVERIS_VERSION}-ubuntu24.04-x86_64.deb" \
- && apt-get install -y --no-install-recommends /tmp/audiveris.deb \
- && PKG="$(dpkg-deb -f /tmp/audiveris.deb Package)" \
- # le chemin d'installation dépend du paquet : on retrouve le lanceur et on le publie sous un nom fixe
- && AUD="$(dpkg -L "$PKG" | grep -E '/bin/[Aa]udiveris$' | head -n 1)" \
- && test -n "$AUD" && ln -s "$AUD" /usr/local/bin/audiveris \
+ && DEPS="$(dpkg-deb -f /tmp/audiveris.deb Depends | sed -e 's/([^)]*)//g' -e 's/|[^,]*//g' | tr ',' '\n' | tr -d ' ' | grep -v -e '^xdg-utils$' -e '^$')" \
+ && apt-get install -y --no-install-recommends $DEPS \
+ && dpkg-deb -x /tmp/audiveris.deb / \
+ && test -x /opt/audiveris/bin/Audiveris \
  # options Java du lanceur (fichier .cfg de jpackage) : mémoire réglée par AUDIVERIS_HEAP
- && CFG="$(dpkg -L "$PKG" | grep -E '/Audiveris\.cfg$' | head -n 1)" \
- && test -n "$CFG" \
+ && CFG=/opt/audiveris/lib/app/Audiveris.cfg \
+ && test -f "$CFG" \
  # (on retire les -Xms/-Xmx existants, puis on insère les nôtres sous [JavaOptions], créée au besoin)
  && sed -i -e '/^java-options=-Xm[sx]/d' "$CFG" \
  && { grep -q '^\[JavaOptions\]' "$CFG" || printf '[JavaOptions]\n' >> "$CFG"; } \
@@ -64,7 +67,7 @@ USER music
 
 ENV HOST=0.0.0.0 \
     PORT=8787 \
-    AUDIVERIS_CMD=/usr/local/bin/audiveris \
+    AUDIVERIS_CMD=/opt/audiveris/bin/Audiveris \
     TESSDATA_PREFIX=/opt/tessdata \
     JOBS_DIR=/tmp/music-reader-jobs \
     JAVA_TOOL_OPTIONS=-Djava.awt.headless=true
