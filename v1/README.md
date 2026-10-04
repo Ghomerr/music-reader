@@ -34,12 +34,18 @@ L'éditeur s'ouvre en bas de l'écran sur la mesure cliquée, avec **l'extrait c
 d'origine** pour comparer ce qui est écrit et ce qui a été lu (quand l'image est disponible, donc pas sur un
 projet rechargé).
 
-- **Placer une note** : choisir une figure dans la palette (ronde → triple croche, point, triolet, silence),
-  puis cliquer sur la portée. Une tête fantôme suit le pointeur, aimantée à la ligne ou à l'interligne le plus
-  proche, avec le nom de la note (« Ré5 · accord »). L'armure est appliquée d'office.
-- **Modifier** : cliquer une note pour la sélectionner, puis ↑/↓ (ou la faire glisser), ♯ ♭ ♮, une autre figure,
-  « liée à la suivante », ou Suppr. Avec « décaler la suite » (coché par défaut), changer une durée ou supprimer
-  une note recale la suite de la voix : une croche lue comme une noire se corrige d'un geste.
+Trois **modes** exclusifs disent ce que fait un clic sur la portée, pour qu'il ne soit jamais ambigu :
+
+- **Sélectionner** (par défaut, touche S) : un clic sur une note la sélectionne (elle s'éclaire au survol), un
+  clic ailleurs désélectionne ; rien n'est jamais posé. On la modifie ensuite : ↑/↓ (ou la faire glisser),
+  ♯ ♭ ♮, une autre figure dans la palette, « liée à la suivante », ou Supprimer (Suppr). Avec « décaler la
+  suite » (coché par défaut), changer une durée ou supprimer une note recale la suite de la voix : une croche
+  lue comme une noire se corrige d'un geste.
+- **Ajouter** (A, ou choisir une figure sans note sélectionnée) : chaque clic pose la figure choisie (ronde →
+  triple croche, point, triolet, silence), même par-dessus une note. Une tête fantôme suit le pointeur, aimantée
+  à la ligne ou à l'interligne le plus proche, avec le nom de la note (« Ré5 · accord »). L'armure est appliquée
+  d'office ; la note posée reste sélectionnée pour lui ajouter un ♭ au besoin.
+- **Gommer** (G) : un clic supprime la note ou le silence visé (en rose au survol).
 - **Notes superposées** : une note posée à l'intérieur d'une autre (une noire au temps 2 sous une blanche du
   temps 1) passe d'elle-même dans une voix libre, annoncée par l'étiquette (« La4 · voix 2 »). Une note ou un
   accord sélectionné se déplace avec « ◀ plus tôt / plus tard ▶ » (Maj+←/→, par pas de sa figure, au plus un

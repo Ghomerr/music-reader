@@ -15,7 +15,7 @@ import {
 import { FigureIcon } from './Glyphs';
 import { KIND_LABEL, kindClass } from './IssueList';
 import { OriginalExcerpt } from './OriginalExcerpt';
-import { StaffEditor, type Tool } from './StaffEditor';
+import { StaffEditor, type EditMode, type Tool } from './StaffEditor';
 
 interface Props {
   project: Project;
@@ -25,6 +25,26 @@ interface Props {
   visibleLines?: Set<string>;
 }
 
+const MODES: { id: EditMode; label: string; title: string }[] = [
+  { id: 'select', label: 'Sélectionner', title: 'Un clic sur une note la sélectionne pour la modifier ; rien n\'est posé (S)' },
+  { id: 'add', label: 'Ajouter', title: 'Un clic sur la portée pose la figure choisie (A)' },
+  { id: 'erase', label: 'Gommer', title: 'Un clic sur une note ou un silence le supprime (G)' },
+];
+
+const MODE_HELP: Record<EditMode, string> = {
+  select: 'Cliquer sur une note pour la sélectionner (elle s\'éclaire au survol), puis la modifier avec les boutons ci-dessus ou la palette ; la glisser la monte ou la descend.',
+  add: 'Cliquer sur la portée pose la figure choisie, aimantée à la ligne la plus proche : au début d\'une note, elle forme un accord ; à l\'intérieur, elle passe dans une autre voix.',
+  erase: 'Cliquer sur une note ou un silence le supprime (elle passe en rose au survol).',
+};
+
+function ModeIcon({ mode }: { mode: EditMode }) {
+  const p = { viewBox: '0 0 24 24', width: 18, height: 18, 'aria-hidden': true, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8,
+              strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const };
+  if (mode === 'select') return <svg {...p}><path d="M5 3l14 8-6 1.5L10 19z" /></svg>;
+  if (mode === 'add') return <svg {...p}><ellipse cx="9" cy="17" rx="4" ry="3" transform="rotate(-20 9 17)" /><path d="M13 16V4" /><path d="M19 4v6M16 7h6" /></svg>;
+  return <svg {...p}><path d="M4 15.5 13.5 6l6 6L10 21.5H6.5L4 19z" /><path d="M9 10.5l6 6" /><path d="M10 21.5h10" /></svg>;
+}
+
 const isField = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]');
 
 export function MeasureEditor({ project, issues, selection, visibleLines }: Props) {
@@ -32,6 +52,8 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
   const measure = project.measures[m];
   const [fig, setFig] = useState<Figure>({ base: 1, dots: 0, triplet: false });
   const [rest, setRest] = useState(false);
+  /** ce que fait un clic sur la portée : sélectionner (défaut, ne pose jamais rien), ajouter, gommer */
+  const [mode, setMode] = useState<EditMode>('select');
   const [insert, setInsert] = useState(false);
   const [shift, setShift] = useState(true);
   const [voice, setVoice] = useState(1);
@@ -77,7 +99,7 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
   if (!measure) return null;
   const len = measureLength(measure);
   const mIssues = issues.filter(i => i.measure === m);
-  const tool: Tool = { figure: figureDuration(fig), rest, insert, voice };
+  const tool: Tool = { figure: figureDuration(fig), rest, insert, voice, mode };
 
   // ---------- Application des gestes ----------
   const ctx = (): EditCtx => ({ measure: m, fifths: measure.fifths, shift, newId: () => newId('n') });
@@ -117,9 +139,21 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
   const onSel = (fn: (ns: NoteEvent[], c: EditCtx, id: string) => NoteEvent[]) => {
     if (sel) apply(sel.lineId, (ns, c) => fn(ns, c, sel.id));
   };
+  /** Changer de mode efface la sélection, sauf en revenant à la sélection. */
+  const changeMode = (md: EditMode) => {
+    setMode(md);
+    if (md !== 'select') setSel(null);
+  };
+  // La palette agit sur la note sélectionnée en mode sélection ; sinon elle choisit la figure à poser
+  // (et passe en mode ajout : choisir une figure, c'est vouloir la poser).
   const chooseFigure = (f: Figure) => {
     setFig(f);
-    if (sel) onSel((ns, c, id) => setDuration(ns, c, id, figureDuration(f)));
+    if (mode === 'select' && sel) onSel((ns, c, id) => setDuration(ns, c, id, figureDuration(f)));
+    else if (mode !== 'add') changeMode('add');
+  };
+  const toggleRest = () => {
+    setRest(r => !r);
+    if (mode !== 'add') changeMode('add');
   };
   const remove = () => {
     if (!sel) return;
@@ -158,7 +192,7 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
     if (e.ctrlKey || e.metaKey || e.altKey || isField(e.target)) return;
     const k = e.key;
     let used = true;
-    if (k === 'Escape') { if (sel) setSel(null); else close(); }
+    if (k === 'Escape') { if (sel) setSel(null); else if (mode !== 'select') changeMode('select'); else close(); }
     else if ((k === 'ArrowUp' || k === 'ArrowDown') && selNote?.pitch) {
       const steps = (k === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 7 : 1);
       onSel((ns, c, id) => movePitch(ns, c, id, steps));
@@ -180,13 +214,18 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
     else if (/^[1-6]$/.test(k)) chooseFigure({ base: FIGURES[+k - 1].base, dots: 0, triplet: fig.triplet });
     else if (k === '.') chooseFigure({ ...fig, dots: fig.dots ? 0 : 1 });
     else if (k === 't' || k === 'T') chooseFigure({ ...fig, triplet: !fig.triplet });
-    else if (k === 'r' || k === 'R' || k === '0') setRest(r => !r);
+    else if (k === 'r' || k === 'R' || k === '0') toggleRest();
+    else if (k === 's' || k === 'S') changeMode('select');
+    else if (k === 'a' || k === 'A') changeMode('add');
+    else if (k === 'g' || k === 'G') changeMode('erase');
     else used = false;
     if (used) e.preventDefault();
   };
 
+  // En mode ajout, la note sélectionnée est celle qu'on vient de poser (pour lui ajouter un ♭ par exemple).
   const selLabel = selNote
-    ? `${selNote.pitch ? pitchLabel(selNote.pitch) : 'Silence'} · ${durationName(selNote.duration)} · voix ${selNote.voice}${selNote.manual ? ' · corrigée' : ''}`
+    ? (mode === 'add' ? 'Note posée : ' : '')
+      + `${selNote.pitch ? pitchLabel(selNote.pitch) : 'Silence'} · ${durationName(selNote.duration)} · voix ${selNote.voice}${selNote.manual ? ' · corrigée' : ''}`
     : null;
 
   return (
@@ -227,6 +266,15 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
 
         <div className="me-tools" role="toolbar" aria-label="Figures et outils">
           <div className="me-palette">
+            {/* Un seul mode à la fois : on sait toujours ce que fera le prochain clic sur la portée. */}
+            <div className="me-modes" role="radiogroup" aria-label="Mode d'édition">
+              {MODES.map(md => (
+                <button key={md.id} role="radio" aria-checked={mode === md.id} title={md.title}
+                        className={`btn me-mode ${md.id}` + (mode === md.id ? ' sel' : '')} onClick={() => changeMode(md.id)}>
+                  <ModeIcon mode={md.id} /> {md.label}
+                </button>
+              ))}
+            </div>
             {FIGURES.map((f, i) => (
               <button key={f.base} className={'btn fig' + (fig.base === f.base ? ' sel' : '')} title={`${f.name} (${i + 1})`} aria-label={f.name}
                       aria-pressed={fig.base === f.base} onClick={() => chooseFigure({ base: f.base, dots: 0, triplet: fig.triplet })}>
@@ -238,23 +286,29 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
             <button className={'btn fig' + (fig.triplet ? ' sel' : '')} title="Triolet (T)" aria-label="triolet" aria-pressed={fig.triplet}
                     onClick={() => chooseFigure({ ...fig, triplet: !fig.triplet })}><b className="fig-txt">³</b></button>
             <button className={'btn fig' + (rest ? ' sel' : '')} title="Poser des silences (R)" aria-label="silence" aria-pressed={rest}
-                    onClick={() => setRest(r => !r)}><FigureIcon fig={{ base: 1, dots: 0, triplet: false }} rest /></button>
-            <span className="me-current" title="Figure posée au prochain clic">
-              <FigureIcon fig={fig} rest={rest} size={26} /> {rest ? 'silence · ' : ''}{durationName(figureDuration(fig))}
-            </span>
+                    onClick={toggleRest}><FigureIcon fig={{ base: 1, dots: 0, triplet: false }} rest /></button>
+            {mode === 'add' && (
+              <span className="me-current" title="Figure posée au prochain clic">
+                <FigureIcon fig={fig} rest={rest} size={26} /> {rest ? 'silence · ' : ''}{durationName(figureDuration(fig))}
+              </span>
+            )}
           </div>
           <div className="row me-opts">
-            <label title="Une note posée au début d'une autre l'insère avant elle et décale la suite, au lieu de former un accord">
-              <input type="checkbox" checked={insert} onChange={e => setInsert(e.target.checked)} /> insérer
-            </label>
+            {mode === 'add' && (
+              <label title="Une note posée au début d'une autre l'insère avant elle et pousse la suite, au lieu de former un accord">
+                <input type="checkbox" checked={insert} onChange={e => setInsert(e.target.checked)} /> insérer avant (pousse la suite)
+              </label>
+            )}
             <label title="Un changement de durée ou une suppression déplace la suite de la voix">
               <input type="checkbox" checked={shift} onChange={e => setShift(e.target.checked)} /> décaler la suite
             </label>
-            <label>voix{' '}
-              <select value={voice} onChange={e => setVoice(+e.target.value)}>
-                {Array.from({ length: maxVoice + 1 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
-              </select>
-            </label>
+            {mode === 'add' && (
+              <label title="Voix des notes posées (une note posée à l'intérieur d'une autre passe d'elle-même dans une voix libre)">voix{' '}
+                <select value={voice} onChange={e => setVoice(+e.target.value)}>
+                  {Array.from({ length: maxVoice + 1 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
+                </select>
+              </label>
+            )}
             <label>couplet{' '}
               <select value={verse} onChange={e => setVerse(+e.target.value)}>
                 {verses.map(v => <option key={v} value={v}>{v}</option>)}
@@ -289,8 +343,10 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
                 <button className="btn sm danger" title="Supprimer (Suppr)" onClick={remove}>Supprimer</button>
               </>
             ) : (
-              <small className="muted">Cliquer sur la portée pose la figure choisie ; cliquer sur une note la sélectionne (glisser pour la déplacer).
-                Clavier : 1–6 figures, « . » point, T triolet, R silence, ↑↓ hauteur, ←→ note voisine, Maj+←→ plus tôt / plus tard, V voix suivante, Suppr, Échap.</small>
+              <small className="muted">
+                {MODE_HELP[mode]}{' '}
+                Clavier : S sélectionner, A ajouter, G gommer · 1–6 figures, « . » point, T triolet, R silence · ↑↓ hauteur,
+                ←→ note voisine, Maj+←→ plus tôt / plus tard, V voix suivante, Suppr, Échap.</small>
             )}
           </div>
         </div>
@@ -333,7 +389,8 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
                            onSelect={id => onSelect(line.id, id)}
                            onInsert={ev => onInsert(line.id, ev)}
                            onMove={(id, steps) => apply(line.id, (ns, c) => movePitch(ns, c, id, steps))}
-                           onLyric={(id, text) => onLyric(line.id, id, text)} />
+                           onLyric={(id, text) => onLyric(line.id, id, text)}
+                           onDelete={id => { apply(line.id, (ns, c) => deleteEvent(ns, c, id)); if (sel?.id === id) setSel(null); }} />
             </section>
           );
         })}

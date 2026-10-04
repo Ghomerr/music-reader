@@ -16,7 +16,16 @@ export interface Tool {
   /** insérer en décalant la suite (au lieu de former un accord) */
   insert: boolean;
   voice: number;
+  /**
+   * Ce que fait un clic, sans ambiguïté :
+   * - select : sélectionne la note visée (ou désélectionne), ne pose jamais rien ;
+   * - add : pose la figure choisie, même par-dessus une note ;
+   * - erase : supprime la note ou le silence visé.
+   */
+  mode: EditMode;
 }
+
+export type EditMode = 'select' | 'add' | 'erase';
 
 interface Props {
   line: Line;
@@ -37,11 +46,15 @@ interface Props {
   /** déplacement vertical d'une note par glisser */
   onMove: (id: string, steps: number) => void;
   onLyric: (id: string, text: string) => void;
+  /** gomme : suppression de la note ou du silence cliqué */
+  onDelete: (id: string) => void;
 }
 
 const INK = '#222';
 const MANUAL = '#4f46e5';
 const SELECT = '#e8590c';
+/** note sous la gomme */
+const ERASE = '#d6336c';
 const GHOST = '#4f46e5';
 const TOP = 16;
 const BOT = 10;
@@ -68,11 +81,17 @@ type Gesture =
   | { kind: 'drag'; id: string; y0: number; delta: number }
   | { kind: 'place' };
 
-export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, verse, lyrics, onSelect, onInsert, onMove, onLyric }: Props) {
+export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, verse, lyrics, onSelect, onInsert, onMove, onLyric, onDelete }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const width = useWidth(wrapRef);
   const [ghost, setGhost] = useState<Ghost | null>(null);
+  /** note que la gomme supprimerait (survol) */
+  const [eraseId, setEraseId] = useState<string | null>(null);
+  /** note qu'un clic sélectionnerait (survol) */
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  // changement de mode : on efface les repères de survol de l'ancien mode
+  useEffect(() => { setGhost(null); setEraseId(null); setHoverId(null); }, [tool.mode]);
   const [drag, setDrag] = useState<{ id: string; delta: number } | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const fifths = measure.fifths;
@@ -138,8 +157,9 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
     const key = s.notes[0].id;
     if (!s.notes[0].pitch) {
       const n = s.notes[0];
-      const col = n.id === selectedId ? SELECT : n.manual ? MANUAL : INK;
+      const col = n.id === eraseId ? ERASE : n.id === selectedId ? SELECT : n.manual ? MANUAL : INK;
       if (n.id === selectedId) out.push(<rect key={key + 'h'} x={x - 11} y={ym - 20} width={22} height={40} rx={6} fill="rgba(232,89,12,.15)" />);
+      else if (n.id === hoverId) out.push(<rect key={key + 'h'} x={x - 11} y={ym - 20} width={22} height={40} rx={6} fill="rgba(79,70,229,.14)" />);
       const yr = multi ? ym + (n.voice % 2 ? -12 : 12) : ym;
       out.push(<g key={key} data-note={n.id}><Rest cx={x} ym={yr} base={base} color={col} /></g>);
       if (fig?.dots) out.push(<g key={key + 'd'}><Dots x={x + 9} y={yr - 3} n={fig.dots} color={col} /></g>);
@@ -166,10 +186,11 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
       return { ...it, hx: x + dx };
     });
     for (const it of placed) {
-      const col = it.n.id === selectedId ? SELECT : it.n.manual ? MANUAL : INK;
+      const col = it.n.id === eraseId ? ERASE : it.n.id === selectedId ? SELECT : it.n.manual ? MANUAL : INK;
       const y = yOf(it.rel);
       out.push(...ledgers(it.hx, it.rel, it.n.id));
       if (it.n.id === selectedId) out.push(<circle key={it.n.id + 'h'} cx={it.hx} cy={y} r={11} fill="rgba(232,89,12,.18)" />);
+      else if (it.n.id === hoverId) out.push(<circle key={it.n.id + 'h'} cx={it.hx} cy={y} r={11} fill="rgba(79,70,229,.16)" />);
       // data-note : repère la tête de chaque note (tests de bout en bout)
       out.push(<g key={it.n.id} data-note={it.n.id}><Head cx={it.hx} y={y} base={base} color={col} /></g>);
       if (it.p.alter !== keyAlter(it.p.step, fifths)) {
@@ -206,8 +227,10 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
     if (!ctm) return null;
     return new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
   };
+  // Zone de clic d'une tête : presque toute la tête, sans déborder sur le degré voisin (STEP = 6), pour
+  // qu'un clic juste au-dessus ajoute encore une note d'accord au lieu de sélectionner.
   const hitTest = (p: DOMPoint, touch: boolean) => {
-    const tx = touch ? 13 : 9, ty = touch ? 6 : 4.5;
+    const tx = touch ? 14 : 11, ty = touch ? 7 : 5.5;
     let best: { id: string; d: number; pitched: boolean } | null = null;
     for (const h of heads) {
       const dx = Math.abs(p.x - h.x), dy = Math.abs(p.y - h.y);
@@ -232,15 +255,22 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
     if (!p) return;
     e.preventDefault();
     svgRef.current?.setPointerCapture(e.pointerId);
-    const h = hitTest(p, e.pointerType !== 'mouse');
-    if (h) {
-      onSelect(h.id);
-      setGhost(null);
-      gesture.current = h.pitched ? { kind: 'drag', id: h.id, y0: p.y, delta: 0 } : null;
+    if (tool.mode === 'add') {
+      // ajout : on pose toujours, même sur une note (accord ou autre voix)
+      gesture.current = { kind: 'place' };
+      setGhost(ghostAt(p));
       return;
     }
-    gesture.current = { kind: 'place' };
-    setGhost(ghostAt(p));
+    const h = hitTest(p, e.pointerType !== 'mouse');
+    if (tool.mode === 'erase') {
+      // gomme : supprime ce qui est sous le doigt, ne pose jamais rien
+      if (h) onDelete(h.id);
+      setEraseId(null);
+      return;
+    }
+    // sélection : la note visée, ou rien (un clic dans le vide désélectionne)
+    onSelect(h?.id ?? null);
+    gesture.current = h?.pitched ? { kind: 'drag', id: h.id, y0: p.y, delta: 0 } : null;
   };
   const onPointerMove = (e: RPointerEvent<SVGSVGElement>) => {
     const p = toSvg(e);
@@ -251,8 +281,14 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
       if (delta !== g.delta) { g.delta = delta; setDrag({ id: g.id, delta }); }
       return;
     }
-    if (!g && e.pointerType === 'mouse' && hitTest(p, false)) { setGhost(null); return; }
-    if (g || e.pointerType === 'mouse') setGhost(ghostAt(p));
+    if (tool.mode === 'add') {
+      if (g || e.pointerType === 'mouse') setGhost(ghostAt(p));
+      return;
+    }
+    // sélection et gomme : la note visée s'éclaire, aucune note fantôme
+    if (e.pointerType !== 'mouse') return;
+    const id = hitTest(p, false)?.id ?? null;
+    if (tool.mode === 'erase') setEraseId(id); else setHoverId(id);
   };
   const onPointerUp = (e: RPointerEvent<SVGSVGElement>) => {
     const g = gesture.current;
@@ -340,9 +376,12 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
 
   return (
     <div ref={wrapRef} className="staff-wrap">
-      <svg ref={svgRef} className="staff-svg" width={geo.svgW} height={geo.height}
+      {/* curseur : main sur une note (sélection ou gomme), croix ailleurs pour poser */}
+      <svg ref={svgRef} className={`staff-svg mode-${tool.mode}` + (hoverId || eraseId ? ' on-note' : '')}
+           width={geo.svgW} height={geo.height}
            onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-           onPointerCancel={onPointerCancel} onPointerLeave={e => { if (e.pointerType === 'mouse' && !gesture.current) setGhost(null); }}
+           onPointerCancel={onPointerCancel}
+           onPointerLeave={e => { if (e.pointerType === 'mouse' && !gesture.current) { setGhost(null); setHoverId(null); setEraseId(null); } }}
            role="img" aria-label={`Portée ${line.name}, mesure ${m + 1}`}>
         <rect x={0} y={0} width={geo.svgW} height={geo.height} fill="#fff" />
         {geo.voiceEnd > len + EPS && <rect x={barX} y={yOf(10)} width={geo.svgW - barX} height={yOf(-2) - yOf(10)} fill="rgba(232,89,12,.10)" />}
