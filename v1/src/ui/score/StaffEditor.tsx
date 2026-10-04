@@ -38,6 +38,8 @@ interface Props {
   len: number;
   tool: Tool;
   selectedId: string | null;
+  /** voix courante sur cette portée : les autres voix sont grisées (null = pas de grisé) */
+  focusVoice?: number | null;
   /** couplets affichés, une rangée de champs chacun (tous ceux de la partition) */
   verses: number[];
   /** afficher les champs de paroles sous les notes */
@@ -56,6 +58,9 @@ const MANUAL = '#4f46e5';
 const SELECT = '#e8590c';
 /** note sous la gomme */
 const ERASE = '#d6336c';
+/** notes des autres voix que la voix courante (grisées) ; une note corrigée garde une pointe d'indigo */
+const OTHER = '#b8b8c0';
+const OTHER_MANUAL = '#bdb9ec';
 const GHOST = '#4f46e5';
 const TOP = 16;
 const BOT = 10;
@@ -82,7 +87,7 @@ type Gesture =
   | { kind: 'drag'; id: string; y0: number; delta: number }
   | { kind: 'place' };
 
-export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, verses, lyrics, onSelect, onInsert, onMove, onLyric, onDelete }: Props) {
+export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, focusVoice, verses, lyrics, onSelect, onInsert, onMove, onLyric, onDelete }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const width = useWidth(wrapRef);
@@ -151,6 +156,12 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
     return after.length ? Math.min(...after) : xOf(s.offset) + 30;
   };
 
+  // Voix courante : sur la portée où l'on travaille, les notes des autres voix passent en gris pour qu'on
+  // distingue les voix superposées d'une même mesure ; changer de voix inverse les couleurs.
+  const dim = (v: number) => focusVoice != null && v !== focusVoice;
+  const colorOf = (n: NoteEvent) => (n.id === eraseId ? ERASE : n.id === selectedId ? SELECT
+    : dim(n.voice) ? (n.manual ? OTHER_MANUAL : OTHER) : n.manual ? MANUAL : INK);
+
   for (const s of slots) {
     const x = xOf(s.offset);
     const fig = figureOf(s.duration);
@@ -158,7 +169,7 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
     const key = s.notes[0].id;
     if (!s.notes[0].pitch) {
       const n = s.notes[0];
-      const col = n.id === eraseId ? ERASE : n.id === selectedId ? SELECT : n.manual ? MANUAL : INK;
+      const col = colorOf(n);
       if (n.id === selectedId) out.push(<rect key={key + 'h'} x={x - 11} y={ym - 20} width={22} height={40} rx={6} fill="rgba(232,89,12,.15)" />);
       else if (n.id === hoverId) out.push(<rect key={key + 'h'} x={x - 11} y={ym - 20} width={22} height={40} rx={6} fill="rgba(79,70,229,.14)" />);
       const yr = multi ? ym + (n.voice % 2 ? -12 : 12) : ym;
@@ -187,9 +198,9 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
       return { ...it, hx: x + dx };
     });
     for (const it of placed) {
-      const col = it.n.id === eraseId ? ERASE : it.n.id === selectedId ? SELECT : it.n.manual ? MANUAL : INK;
+      const col = colorOf(it.n);
       const y = yOf(it.rel);
-      out.push(...ledgers(it.hx, it.rel, it.n.id));
+      out.push(...ledgers(it.hx, it.rel, it.n.id, dim(it.n.voice) ? OTHER : INK));
       if (it.n.id === selectedId) out.push(<circle key={it.n.id + 'h'} cx={it.hx} cy={y} r={11} fill="rgba(232,89,12,.18)" />);
       else if (it.n.id === hoverId) out.push(<circle key={it.n.id + 'h'} cx={it.hx} cy={y} r={11} fill="rgba(79,70,229,.16)" />);
       // data-note : repère la tête de chaque note (tests de bout en bout)
@@ -210,14 +221,15 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
       heads.push({ id: it.n.id, x: it.hx, y });
     }
     if (base < 4) {
-      const col = s.notes.some(n => n.id === selectedId) ? SELECT : s.notes.some(n => n.manual) ? MANUAL : INK;
+      const col = s.notes.some(n => n.id === selectedId) ? SELECT
+        : dim(s.voice) ? (s.notes.some(n => n.manual) ? OTHER_MANUAL : OTHER) : s.notes.some(n => n.manual) ? MANUAL : INK;
       const sx = up ? x + 5.6 : x - 5.6;
       const y0 = up ? yOf(lo) - 1 : yOf(hi) + 1;
       const y1 = up ? yOf(hi) - 7 * STEP : yOf(lo) + 7 * STEP;
       out.push(<Stem key={key + 's'} x={sx} y0={y0} y1={y1} flags={flagCount(base)} color={col} />);
       if (fig?.triplet) out.push(<text key={key + '3'} x={sx} y={up ? y1 - 4 : y1 + 12} textAnchor="middle" fontSize={11} fontWeight={700} fill={col}>3</text>);
     } else if (fig?.triplet) {
-      out.push(<text key={key + '3'} x={x} y={yOf(hi) - 10} textAnchor="middle" fontSize={11} fontWeight={700} fill={INK}>3</text>);
+      out.push(<text key={key + '3'} x={x} y={yOf(hi) - 10} textAnchor="middle" fontSize={11} fontWeight={700} fill={dim(s.voice) ? OTHER : INK}>3</text>);
     }
     if (!fig) out.push(<text key={key + '?'} x={x} y={yOf(hi) - 12} textAnchor="middle" fontSize={10} fill={SELECT}>{+s.duration.toFixed(2)}</text>);
   }

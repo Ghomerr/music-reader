@@ -52,6 +52,9 @@ Trois **modes** exclusifs disent ce que fait un clic sur la portée, pour qu'il 
   temps 1) passe d'elle-même dans une voix libre, annoncée par l'étiquette (« La4 · voix 2 »). Une note ou un
   accord sélectionné se déplace avec « ◀ plus tôt / plus tard ▶ » (Maj+←/→, par pas de sa figure, au plus un
   temps) et change de voix avec le sélecteur « voix » (V).
+- **Voix courante** : sur la portée où l'on travaille, les notes des autres voix sont grisées ; changer de voix
+  courante (sélecteur, ou V sans note sélectionnée) inverse les couleurs. Sélectionner une note fait de sa voix
+  la voix courante.
 - **Seconde voix mal placée** : Audiveris met parfois la seconde voix d'une portée à la suite de la première
   au lieu de la superposer, et la mesure déborde d'un temps (Over The Rainbow, mesures 3, 11 et 16 du piano).
   On la recale en déplaçant ses accords et en les passant en voix 2 : chaque voix retombe sur la métrique.

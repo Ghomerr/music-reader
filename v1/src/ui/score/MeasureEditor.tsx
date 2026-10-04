@@ -167,6 +167,16 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
     if (mode === 'select' && sel) onSel((ns, c, id) => setDuration(ns, c, id, figureDuration(f)));
     else if (mode !== 'add') changeMode('add');
   };
+  /** Change de voix courante ; une note sélectionnée dans une autre voix est désélectionnée. */
+  const changeVoice = (v: number) => {
+    setVoice(v);
+    if (selNote && selNote.voice !== v) setSel(null);
+  };
+  /** Passe la note sélectionnée dans la voix `v`, qui devient la voix courante (la note reste en noir). */
+  const moveToVoice = (v: number) => {
+    onSel((ns, c, id) => setVoiceOf(ns, c, id, v));
+    setVoice(v);
+  };
   const toggleRest = () => {
     setRest(r => !r);
     if (mode !== 'add') changeMode('add');
@@ -214,8 +224,10 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
       onSel((ns, c, id) => movePitch(ns, c, id, steps));
     } else if ((k === 'ArrowLeft' || k === 'ArrowRight') && e.shiftKey && selNote) {
       nudge(k === 'ArrowLeft' ? -1 : 1);
-    } else if ((k === 'v' || k === 'V') && selNote) {
-      onSel((ns, c, id) => setVoiceOf(ns, c, id, (selNote.voice % (maxVoice + 1)) + 1));
+    } else if (k === 'v' || k === 'V') {
+      // note sélectionnée : elle passe dans la voix suivante (qui devient la voix courante) ; sinon on change de voix courante
+      const next = ((selNote?.voice ?? voice) % (maxVoice + 1)) + 1;
+      if (selNote) moveToVoice(next); else changeVoice(next);
     } else if (k === 'ArrowLeft' || k === 'ArrowRight') {
       const dir = k === 'ArrowLeft' ? -1 : 1;
       const line = sel && project.lines.find(l => l.id === sel.lineId);
@@ -318,9 +330,10 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
             <label title="Un changement de durée ou une suppression déplace la suite de la voix">
               <input type="checkbox" checked={shift} onChange={e => setShift(e.target.checked)} /> décaler la suite
             </label>
-            {mode === 'add' && (
-              <label title="Voix des notes posées (une note posée à l'intérieur d'une autre passe d'elle-même dans une voix libre)">voix{' '}
-                <select value={voice} onChange={e => setVoice(+e.target.value)}>
+            {(mode === 'add' || maxVoice > 1) && (
+              <label title="Voix sur laquelle on travaille : les autres voix de la portée passent en gris, et les notes posées vont dans cette voix (V pour passer à la suivante)">
+                voix courante{' '}
+                <select value={voice} onChange={e => changeVoice(+e.target.value)}>
                   {Array.from({ length: maxVoice + 1 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
                 </select>
               </label>
@@ -358,7 +371,7 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
                 <button className="btn sm" title={`Plus tard, par pas de ${stepLabel} (Maj+→)`} onClick={() => nudge(1)}>plus tard ▶</button>
                 <label className="me-voice" title="Passer la note (et son accord) dans une autre voix, à la même position (V)">
                   voix{' '}
-                  <select value={selNote.voice} onChange={e => onSel((ns, c, id) => setVoiceOf(ns, c, id, +e.target.value))}>
+                  <select value={selNote.voice} onChange={e => moveToVoice(+e.target.value)}>
                     {Array.from({ length: maxVoice + 1 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
                   </select>
                 </label>
@@ -408,6 +421,7 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
               </div>
               <StaffEditor line={line} m={m} measure={measure} notes={measureNotes(line, m)} len={len} tool={tool}
                            selectedId={sel?.lineId === line.id ? sel.id : null} verses={shownVerses} lyrics={showLyrics}
+                           focusVoice={line.id === activeLine ? voice : null}
                            onSelect={id => onSelect(line.id, id)}
                            onInsert={ev => onInsert(line.id, ev)}
                            onMove={(id, steps) => apply(line.id, (ns, c) => movePitch(ns, c, id, steps))}
