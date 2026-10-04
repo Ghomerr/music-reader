@@ -385,6 +385,22 @@ export function setLyric(lineNotes: NoteEvent[], id: string, verse: number, inpu
   return out;
 }
 
+/**
+ * Retire un couplet des notes d'une ligne (à appliquer à toute la partition) ; les couplets suivants
+ * remontent d'un cran, si bien qu'il reste toujours un couplet 1. Sert à ne garder qu'une ligne de texte
+ * quand l'original en imprime deux (paroles anglaises et françaises, par exemple).
+ */
+export function dropVerse(notes: NoteEvent[], verse: number): NoteEvent[] {
+  if (!notes.some(n => n.lyrics?.length)) return notes;
+  return notes.map(n => {
+    if (!n.lyrics?.length) return n;
+    const lyrics = n.lyrics.filter(l => l.verse !== verse).map(l => (l.verse > verse ? { ...l, verse: l.verse - 1 } : l));
+    const { lyrics: _old, ...bare } = n;
+    void _old;
+    return lyrics.length ? { ...bare, lyrics } : bare;
+  });
+}
+
 /** Couplets présents dans une ligne (au moins le 1). */
 export function versesOf(line: Line): number[] {
   const s = new Set<number>([1]);

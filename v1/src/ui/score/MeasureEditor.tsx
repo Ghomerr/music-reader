@@ -9,7 +9,7 @@ import { playMeasure } from '../../audio/player';
 import { lineColor } from '../player/colors';
 import {
   FIGURES, contentEnd, deleteEvent, figureDuration, figureOf, fitToMeter, insertEvent, measureLength, measureNotes, moveInTime,
-  movePitch, replaceMeasureNotes, setAlter, setDuration, setLyric, setVoice as setVoiceOf, toggleTie, versesOf,
+  dropVerse, movePitch, replaceMeasureNotes, setAlter, setDuration, setLyric, setVoice as setVoiceOf, toggleTie, versesOf,
   type EditCtx, type Figure, type NewEvent,
 } from './edit';
 import { FigureIcon } from './Glyphs';
@@ -57,7 +57,8 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
   const [insert, setInsert] = useState(false);
   const [shift, setShift] = useState(true);
   const [voice, setVoice] = useState(1);
-  const [verse, setVerse] = useState(1);
+  /** une rangée vide pour saisir un couplet de plus */
+  const [addingVerse, setAddingVerse] = useState(false);
   const [sel, setSel] = useState<{ lineId: string; id: string } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -83,9 +84,24 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
     for (const l of project.lines) for (const v of versesOf(l)) s.add(v);
     return [...s].sort((a, b) => a - b);
   }, [project.lines]);
+  // Tous les couplets s'affichent ensemble ; « + couplet » ajoute une rangée vide, qui devient un vrai
+  // couplet dès sa première syllabe.
+  const nextVerse = Math.max(...verses) + 1;
+  const shownVerses = addingVerse ? [...verses, nextVerse] : verses;
+  useEffect(() => { setAddingVerse(false); }, [verses.length]);
+  /** Supprime un couplet dans toute la partition (une seule correction, annulable). */
+  const deleteVerse = (v: number) => {
+    if (!window.confirm(`Supprimer le couplet ${v} dans toute la partition ?${verses.length > 1 ? ' Les couplets suivants seront renumérotés.' : ''} (Ctrl+Z pour annuler)`)) return;
+    editProject(d => {
+      for (const l of d.lines) l.notes = dropVerse(l.notes, v);
+      const pv = d.settings.print.verses;
+      if (pv.length) d.settings.print.verses = pv.filter(x => x !== v).map(x => (x > v ? x - 1 : x));
+    });
+  };
   // Champs de paroles : d'office sur les lignes qui en portent (le chant), à la demande ailleurs.
   const withLyrics = useMemo(() => new Set(project.lines.filter(l => l.notes.some(n => n.lyrics?.length)).map(l => l.id)), [project.lines]);
   const [lyricToggles, setLyricToggles] = useState<Set<string>>(() => new Set());
+  const hasLyrics = withLyrics.size > 0;
   const maxVoice = useMemo(() => Math.max(1, ...project.lines.flatMap(l => measureNotes(l, m).map(n => n.voice))), [project.lines, m]);
 
   // gestionnaire clavier relu à chaque rendu (état courant), écouteur posé une seule fois
@@ -129,7 +145,7 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
     if (f) setFig(f);
     setVoice(n.voice);
   };
-  const onLyric = (lineId: string, id: string, text: string) => {
+  const onLyric = (lineId: string, id: string, verse: number, text: string) => {
     const line = getState().project?.lines.find(l => l.id === lineId);
     if (!line) return;
     const after = setLyric(line.notes, id, verse, text);
@@ -309,12 +325,18 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
                 </select>
               </label>
             )}
-            <label>couplet{' '}
-              <select value={verse} onChange={e => setVerse(+e.target.value)}>
-                {verses.map(v => <option key={v} value={v}>{v}</option>)}
-                <option value={Math.max(...verses) + 1}>nouveau ({Math.max(...verses) + 1})</option>
-              </select>
-            </label>
+            <span className="me-verses" title="Couplets de paroles : chacun a sa rangée de champs sous les notes">
+              {verses.length > 1 ? 'couplets' : 'paroles'}
+              {verses.length > 1 && verses.map(v => (
+                <button key={v} className="btn sm" onClick={() => deleteVerse(v)}
+                        title={`Supprimer le couplet ${v} dans toute la partition (annulable)`}>{v} ✕</button>
+              ))}
+              {verses.length === 1 && hasLyrics && (
+                <button className="btn sm" onClick={() => deleteVerse(1)} title="Supprimer toutes les paroles de la partition (annulable)">✕ tout supprimer</button>
+              )}
+              <button className="btn sm" disabled={addingVerse} onClick={() => setAddingVerse(true)}
+                      title={`Ajouter une rangée pour saisir le couplet ${nextVerse}`}>+ couplet</button>
+            </span>
           </div>
           <div className="row me-selbar" aria-live="polite">
             {selNote ? (
@@ -385,11 +407,11 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
                 </button>
               </div>
               <StaffEditor line={line} m={m} measure={measure} notes={measureNotes(line, m)} len={len} tool={tool}
-                           selectedId={sel?.lineId === line.id ? sel.id : null} verse={verse} lyrics={showLyrics}
+                           selectedId={sel?.lineId === line.id ? sel.id : null} verses={shownVerses} lyrics={showLyrics}
                            onSelect={id => onSelect(line.id, id)}
                            onInsert={ev => onInsert(line.id, ev)}
                            onMove={(id, steps) => apply(line.id, (ns, c) => movePitch(ns, c, id, steps))}
-                           onLyric={(id, text) => onLyric(line.id, id, text)}
+                           onLyric={(id, v, text) => onLyric(line.id, id, v, text)}
                            onDelete={id => { apply(line.id, (ns, c) => deleteEvent(ns, c, id)); if (sel?.id === id) setSel(null); }} />
             </section>
           );

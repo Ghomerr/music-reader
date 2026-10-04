@@ -38,14 +38,15 @@ interface Props {
   len: number;
   tool: Tool;
   selectedId: string | null;
-  verse: number;
+  /** couplets affichés, une rangée de champs chacun (tous ceux de la partition) */
+  verses: number[];
   /** afficher les champs de paroles sous les notes */
   lyrics: boolean;
   onSelect: (id: string | null) => void;
   onInsert: (ev: NewEvent) => void;
   /** déplacement vertical d'une note par glisser */
   onMove: (id: string, steps: number) => void;
-  onLyric: (id: string, text: string) => void;
+  onLyric: (id: string, verse: number, text: string) => void;
   /** gomme : suppression de la note ou du silence cliqué */
   onDelete: (id: string) => void;
 }
@@ -81,7 +82,7 @@ type Gesture =
   | { kind: 'drag'; id: string; y0: number; delta: number }
   | { kind: 'place' };
 
-export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, verse, lyrics, onSelect, onInsert, onMove, onLyric, onDelete }: Props) {
+export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, verses, lyrics, onSelect, onInsert, onMove, onLyric, onDelete }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const width = useWidth(wrapRef);
@@ -369,10 +370,18 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
   const clefChanges = (line.clefChanges ?? []).filter(ch => ch.measure === m && ch.offset > EPS);
 
   // ---------- Paroles ----------
-  const lyricSlots = pitchedSlots
-    .filter(s => s.voice === tool.voice || s.notes.some(n => lyricOf(n, verse)))
-    .map(s => ({ s, holder: s.notes.find(n => lyricOf(n, verse)) ?? s.notes[0] }));
-  const lyricVoices = [...new Set(lyricSlots.map(l => l.s.voice))].sort((a, b) => a - b);
+  // Une rangée de champs par couplet (et par voix qui porte des paroles) : toutes les lignes de texte de
+  // l'original sont visibles et modifiables d'un coup, numérotées quand il y en a plusieurs.
+  type LyricItem = { s: Slot; holder: NoteEvent };
+  const lyricRows: { verse: number; voice: number; items: LyricItem[] }[] = [];
+  for (const v of verses) {
+    const items = pitchedSlots
+      .filter(s => s.voice === tool.voice || s.notes.some(n => lyricOf(n, v)))
+      .map(s => ({ s, holder: s.notes.find(n => lyricOf(n, v)) ?? s.notes[0] }));
+    for (const voice of [...new Set(items.map(i => i.s.voice))].sort((a, b) => a - b)) {
+      lyricRows.push({ verse: v, voice, items: items.filter(i => i.s.voice === voice) });
+    }
+  }
 
   return (
     <div ref={wrapRef} className="staff-wrap">
@@ -396,20 +405,25 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
         {out}
         {ghostEl}
       </svg>
-      {lyrics && lyricVoices.length > 0 && (
-        <div className="staff-lyrics" style={{ width: geo.svgW, height: lyricVoices.length * 32 }}>
-          {lyricSlots.map(({ s, holder }) => {
-            const after = lyricSlots.filter(o => o.s.voice === s.voice && o.s.offset > s.offset + EPS).map(o => xOf(o.s.offset));
-            const right = after.length ? Math.min(...after) - 14 - 3 : geo.svgW - 6;
-            const left = xOf(s.offset) - 14;
-            const text = lyricDisplay(lyricOf(holder, verse));
-            return (
-              <LyricInput key={`${holder.id}|${verse}|${text}`} value={text}
-                          style={{ left, top: lyricVoices.indexOf(s.voice) * 32, width: Math.max(38, Math.min(130, right - left)) }}
-                          label={`Syllabe, ${pitchLabel(holder.pitch!)}, temps ${+(s.offset + 1).toFixed(2)}`}
-                          onCommit={t => onLyric(holder.id, t)} />
-            );
-          })}
+      {lyrics && lyricRows.length > 0 && (
+        <div className="staff-lyrics" style={{ width: geo.svgW, height: lyricRows.length * 32 }}>
+          {lyricRows.map((row, r) => [
+            verses.length > 1 && (
+              <span key={`v${r}`} className="staff-verse" style={{ top: r * 32 }} title={`Couplet ${row.verse}`}>{row.verse}</span>
+            ),
+            ...row.items.map(({ s, holder }) => {
+              const after = row.items.filter(o => o.s.offset > s.offset + EPS).map(o => xOf(o.s.offset));
+              const right = after.length ? Math.min(...after) - 14 - 3 : geo.svgW - 6;
+              const left = xOf(s.offset) - 14;
+              const text = lyricDisplay(lyricOf(holder, row.verse));
+              return (
+                <LyricInput key={`${holder.id}|${row.verse}|${text}`} value={text}
+                            style={{ left, top: r * 32, width: Math.max(38, Math.min(130, right - left)) }}
+                            label={`Couplet ${row.verse}, syllabe, ${pitchLabel(holder.pitch!)}, temps ${+(s.offset + 1).toFixed(2)}`}
+                            onCommit={t => onLyric(holder.id, row.verse, t)} />
+              );
+            }),
+          ])}
         </div>
       )}
     </div>

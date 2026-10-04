@@ -63,6 +63,7 @@
 .me-original figcaption{font-size:12px;color:#666;padding:2px 4px 0}
 .me-lines{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;padding-bottom:24px}
 .me-voice{display:inline-flex;align-items:center;gap:4px;font-size:13px}
+.me-verses{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 
 .me-tools{display:flex;flex-direction:column;gap:8px;align-self:stretch}
 .me-palette{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -96,6 +97,7 @@
 .staff-lyric{position:absolute;height:28px;padding:2px 4px!important;font-size:14px;text-align:left;
   background:#fff!important;color:#222!important;border:1px solid #d8d6e8!important;border-radius:6px!important}
 .staff-lyric.empty{border-style:dashed!important}
+.staff-verse{position:absolute;left:6px;height:28px;line-height:28px;font-size:12px;font-weight:700;color:#4f46e5}
 .staff-lyric:focus{outline:2px solid #4f46e5;border-color:#4f46e5!important}
 
 @media (max-width:700px){

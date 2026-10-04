@@ -3,7 +3,7 @@ import type { NoteEvent, Pitch, Step } from '../../model/types';
 import {
   clefAt, clefBottom, contentEnd, decompose, deleteEvent, figureDuration, figureOf, fitToMeter, flagCount, insertEvent,
   keySignature, lyricDisplay, measureBox, moveInTime, movePitch, setAlter, setDuration, setLyric, setVoice, snapOffset,
-  toggleTie, type EditCtx,
+  toggleTie, dropVerse, type EditCtx,
 } from './edit';
 
 const P = (s: string): Pitch => ({ step: s[0] as Step, alter: 0, octave: +s.slice(1) });
@@ -280,5 +280,21 @@ describe('notes superposées', () => {
     // au début de la blanche, c'est toujours un accord dans la voix 1
     const r3 = insertEvent(notes, ctx(), { offset: 0, duration: 1, pitch: P('E4'), voice: 1 });
     expect(r3.notes.find(x => x.id === r3.id)!.voice).toBe(1);
+  });
+});
+
+describe('couplets', () => {
+  it('supprimer un couplet renumérote les suivants et retire les paroles vides', () => {
+    const notes: NoteEvent[] = [
+      { ...ev('a', 0, 1, 'C4'), lyrics: [{ verse: 1, text: 'Some', syllabic: 'begin' }, { verse: 2, text: 'Là', syllabic: 'begin' }] },
+      { ...ev('b', 1, 1, 'D4'), lyrics: [{ verse: 2, text: 'haut', syllabic: 'end' }] },
+      ev('c', 2, 1, 'E4'),
+    ];
+    const out = dropVerse(notes, 1);
+    expect(out[0].lyrics).toEqual([{ verse: 1, text: 'Là', syllabic: 'begin' }]);
+    expect(out[1].lyrics).toEqual([{ verse: 1, text: 'haut', syllabic: 'end' }]);
+    expect(out[2]).toBe(notes[2]);
+    const none = dropVerse(out, 1);
+    expect(none.every(n => !('lyrics' in n))).toBe(true);
   });
 });
