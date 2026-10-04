@@ -153,9 +153,16 @@ qui relaie `/api` vers le serveur). Vérifications : `npm run typecheck`, `npm t
 Variables d'environnement : celles de la v0 (`PORT`, `HOST`, `AUDIVERIS_CMD`, `TESSDATA_PREFIX`,
 `MUSIC_FONT`, `STEM_LESS_BOOST`), plus `JOBS_DIR` et `DIST_DIR`.
 
-**Docker** : `docker build -t music-reader .` puis `docker run --rm -p 8787:8787 music-reader`. Le `Dockerfile`
-(Ubuntu 24.04, paquet officiel d'Audiveris 5.11, modèles OCR standard eng/fra/ita) **n'a pas encore été testé** :
-Docker n'était pas disponible sur le poste de développement. Prévoir 1 à 2 Go de mémoire.
+**Docker** : `docker build -t music-reader .` (depuis `v1/`) puis `docker run --rm -p 8787:8787 music-reader`. Le
+`Dockerfile` (Ubuntu 24.04, paquet officiel d'Audiveris 5.11, modèles OCR standard eng/fra/ita) **n'a pas encore été
+testé** : Docker n'était pas disponible sur le poste de développement. Prévoir 1 à 2 Go de mémoire. Le lanceur
+d'Audiveris réserve 512 Mo d'office : le Dockerfile le ramène à 64 Mo et plafonne la mémoire de Java par
+`--build-arg AUDIVERIS_HEAP=…` (1 Go par défaut).
+
+**Render** : le [`render.yaml`](../render.yaml) à la racine du dépôt indique où trouver le Dockerfile (`./v1/Dockerfile`,
+contexte `./v1`). Pour un service créé à la main, régler la même chose dans *Settings › Build & Deploy*. L'offre
+gratuite (512 Mo) affiche l'application, mais une analyse risque d'y manquer de mémoire : `AUDIVERIS_HEAP=320m` y
+est le maximum raisonnable, et l'offre à 2 Go est celle qui convient à Audiveris.
 
 ## Organisation du code
 

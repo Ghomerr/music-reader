@@ -1,0 +1,19 @@
+# Déploiement sur Render (Blueprint). L'application vit dans v1/ avec son Dockerfile : sans ces chemins,
+# Render cherche un Dockerfile à la racine du dépôt et échoue (« open Dockerfile: no such file »).
+# Pour un service déjà créé à la main, l'équivalent se règle dans Settings > Build & Deploy :
+# Dockerfile Path = ./v1/Dockerfile et Docker Build Context Directory = ./v1 (ou Root Directory = v1).
+services:
+  - type: web
+    name: lect-o-note-matic-3000
+    runtime: docker
+    dockerfilePath: ./v1/Dockerfile
+    dockerContext: ./v1
+    # Audiveris (Java) a besoin de 1 à 2 Go : l'offre gratuite (512 Mo) suffit à afficher l'application,
+    # mais une analyse risque d'y être interrompue faute de mémoire. Avec 512 Mo, construire l'image avec
+    # AUDIVERIS_HEAP=320m (variable d'environnement ci-dessous, transmise au Dockerfile comme --build-arg).
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: AUDIVERIS_HEAP
+        value: 320m

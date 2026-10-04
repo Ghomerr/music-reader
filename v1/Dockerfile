@@ -1,8 +1,9 @@
 # Music Reader v1 — image de production : interface construite + serveur Node + Audiveris 5.11 (Linux).
 # NON TESTÉ (Docker indisponible sur le poste de développement) : à valider au premier déploiement.
-#   docker build -t music-reader .
+#   docker build -t music-reader .                     (depuis v1/ : c'est le contexte de construction)
+#   docker build --build-arg AUDIVERIS_HEAP=320m ...   (petite instance de 512 Mo)
 #   docker run --rm -p 8787:8787 music-reader      puis http://localhost:8787
-# Prévoir 1 à 2 Go de mémoire : Audiveris est une application Java.
+# Prévoir 1 à 2 Go de mémoire : Audiveris est une application Java. Render : voir render.yaml à la racine.
 
 # ---------- 1. Interface (Vite) ----------
 FROM node:20-bookworm-slim AS front
@@ -17,6 +18,10 @@ RUN npm run build
 # ---------- 2. Exécution : Ubuntu 24.04 (paquet officiel d'Audiveris) + Node 20 ----------
 FROM ubuntu:24.04
 ARG AUDIVERIS_VERSION=5.11.0
+# Mémoire maximale de Java pour Audiveris. Son lanceur impose -Xms512m -Xmx8G : 512 Mo réservés d'office
+# suffisent à faire tuer le conteneur sur une petite instance. On les remplace : -Xms64m et ce plafond,
+# à adapter à la mémoire de l'instance (laisser ~150 Mo à Node et à la JVM hors tas). 1 à 2 Go conseillés.
+ARG AUDIVERIS_HEAP=1g
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -24,9 +29,15 @@ RUN apt-get update \
  && curl -fsSL -o /tmp/audiveris.deb \
       "https://github.com/Audiveris/audiveris/releases/download/${AUDIVERIS_VERSION}/Audiveris-${AUDIVERIS_VERSION}-ubuntu24.04-x86_64.deb" \
  && apt-get install -y --no-install-recommends /tmp/audiveris.deb \
+ && PKG="$(dpkg-deb -f /tmp/audiveris.deb Package)" \
  # le chemin d'installation dépend du paquet : on retrouve le lanceur et on le publie sous un nom fixe
- && AUD="$(dpkg -L "$(dpkg-deb -f /tmp/audiveris.deb Package)" | grep -E '/bin/[Aa]udiveris$' | head -n 1)" \
+ && AUD="$(dpkg -L "$PKG" | grep -E '/bin/[Aa]udiveris$' | head -n 1)" \
  && test -n "$AUD" && ln -s "$AUD" /usr/local/bin/audiveris \
+ # options Java du lanceur (fichier .cfg de jpackage) : mémoire réglée par AUDIVERIS_HEAP
+ && CFG="$(dpkg -L "$PKG" | grep -E '/Audiveris\.cfg$' | head -n 1)" \
+ && test -n "$CFG" \
+ && sed -i -e 's/^java-options=-Xms.*/java-options=-Xms64m/' -e "s/^java-options=-Xmx.*/java-options=-Xmx${AUDIVERIS_HEAP}/" "$CFG" \
+ && grep -E '^java-options=-Xm' "$CFG" \
  && rm -f /tmp/audiveris.deb \
  && rm -rf /var/lib/apt/lists/*
 
