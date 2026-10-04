@@ -264,9 +264,9 @@ export function writeMusicXml(p: Project, o: WriteOptions = {}): string {
   const r0 = Math.max(0, Math.min(o.range?.[0] ?? 0, last));
   const r1 = Math.max(r0, Math.min(o.range?.[1] ?? last, last));
   const inRange = (m: number) => m >= r0 && m <= r1;
-  // Longueur de chaque mesure, celle de la lecture (métrique, débordement, anacrouse), calculée sur
-  // toutes les lignes : une mesure a la même longueur quelles que soient les lignes imprimées.
-  const lens = timeline(p).map(x => tick(x.len));
+  // Longueur de chaque mesure (métrique, débordement, anacrouse), calculée sur les seules lignes écrites :
+  // une ligne absente qui déborde n'allonge pas les mesures de celles qu'on imprime.
+  const lens = timeline(p, chosen.map(l => l.id)).map(x => tick(x.len));
   const keys = p.measures.map(m => ({ ...transposeKey(m.fifths, t), mode: m.mode }));
 
   // Parties : lignes regroupées par line.part, dans l'ordre d'apparition.

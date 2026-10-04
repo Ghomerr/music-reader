@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEven
 import type { Line, Measure, NoteEvent } from '../../model/types';
 import { EPS, diatonic, durationName, keyAlter, pitchLabel, same } from '../../model/pitch';
 import {
-  clefAt, clefBottom, figureOf, flagCount, keySignature, lyricDisplay, lyricOf, pitchAt, snapOffset, type NewEvent,
+  clefAt, clefBottom, figureOf, flagCount, keySignature, lyricDisplay, lyricOf, pitchAt, snapOffset, targetVoice, type NewEvent,
 } from './edit';
 import { ACC_CHAR, Dots, Head, Rest, STEP, Stem } from './Glyphs';
 
@@ -141,7 +141,7 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
       const col = n.id === selectedId ? SELECT : n.manual ? MANUAL : INK;
       if (n.id === selectedId) out.push(<rect key={key + 'h'} x={x - 11} y={ym - 20} width={22} height={40} rx={6} fill="rgba(232,89,12,.15)" />);
       const yr = multi ? ym + (n.voice % 2 ? -12 : 12) : ym;
-      out.push(<Rest key={key} cx={x} ym={yr} base={base} color={col} />);
+      out.push(<g key={key} data-note={n.id}><Rest cx={x} ym={yr} base={base} color={col} /></g>);
       if (fig?.dots) out.push(<g key={key + 'd'}><Dots x={x + 9} y={yr - 3} n={fig.dots} color={col} /></g>);
       if (!fig) out.push(<text key={key + '?'} x={x} y={yOf(10)} textAnchor="middle" fontSize={10} fill={SELECT}>{+s.duration.toFixed(2)}</text>);
       restHits.push({ id: n.id, x, y: yr });
@@ -170,7 +170,8 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
       const y = yOf(it.rel);
       out.push(...ledgers(it.hx, it.rel, it.n.id));
       if (it.n.id === selectedId) out.push(<circle key={it.n.id + 'h'} cx={it.hx} cy={y} r={11} fill="rgba(232,89,12,.18)" />);
-      out.push(<Head key={it.n.id} cx={it.hx} y={y} base={base} color={col} />);
+      // data-note : repère la tête de chaque note (tests de bout en bout)
+      out.push(<g key={it.n.id} data-note={it.n.id}><Head cx={it.hx} y={y} base={base} color={col} /></g>);
       if (it.p.alter !== keyAlter(it.p.step, fifths)) {
         out.push(<text key={it.n.id + 'a'} x={x - 11} y={y + 5} textAnchor="end" fontSize={15} fill={col}>{ACC_CHAR[String(it.p.alter)] ?? '?'}</text>);
       }
@@ -278,7 +279,11 @@ export function StaffEditor({ line, m, measure, notes, len, tool, selectedId, ve
     const fig = figureOf(tool.figure);
     const base = fig?.base ?? 1;
     const d = ghost.rel + geo.bottomAt(ghost.offset);
-    const label = tool.rest ? 'silence · ' + durationName(tool.figure) : pitchLabel(pitchAt(d, fifths)) + (ghost.kind === 'chord' && !tool.insert ? ' · accord' : '');
+    const p = pitchAt(d, fifths);
+    // posée à l'intérieur d'une note, elle passera dans une autre voix : on l'annonce
+    const v = targetVoice(notes, { offset: ghost.offset, duration: tool.figure, voice: tool.voice, insert: tool.insert, pitch: tool.rest ? null : p });
+    const label = tool.rest ? 'silence · ' + durationName(tool.figure)
+      : pitchLabel(p) + (ghost.kind === 'chord' && !tool.insert ? ' · accord' : v !== tool.voice ? ` · voix ${v}` : '');
     const ly = tool.rest ? yOf(10) : Math.min(yOf(ghost.rel) - 26, yOf(10));
     ghostEl = (
       <g pointerEvents="none">

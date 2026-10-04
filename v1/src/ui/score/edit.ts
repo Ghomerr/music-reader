@@ -160,6 +160,22 @@ export interface NewEvent {
 }
 
 /**
+ * Voix où atterrit un évènement posé à `offset` pour `duration` : la voix demandée, sauf si l'on pose une
+ * note à l'intérieur d'une note de cette voix (blanche au temps 1, noire posée au temps 2). Elle passe
+ * alors dans la première voix libre sur cette durée : les notes se superposent au lieu d'être repoussées.
+ */
+export function targetVoice(notes: NoteEvent[], ev: Pick<NewEvent, 'offset' | 'duration' | 'voice' | 'insert' | 'pitch'>): number {
+  if (ev.insert || !ev.pitch) return ev.voice;
+  const a = ev.offset, b = ev.offset + ev.duration;
+  const inside = (v: number) => notes.some(n => n.pitch && n.voice === v && n.offset < a - EPS && end(n) > a + EPS);
+  if (!inside(ev.voice)) return ev.voice;
+  const busy = (v: number) => notes.some(n => n.pitch && n.voice === v && n.offset < b - EPS && end(n) > a + EPS);
+  let v = 1;
+  while (busy(v)) v++;
+  return v;
+}
+
+/**
  * Pose une note ou un silence.
  * - Note à l'endroit où commence une note de la voix : elle rejoint l'accord (avec sa durée).
  * - Silence à l'endroit où commence une note : il la remplace et prend la figure choisie.
@@ -168,7 +184,7 @@ export interface NewEvent {
  * - `insert` : tout ce qui commence à partir de là est repoussé de la durée posée.
  */
 export function insertEvent(notes: NoteEvent[], ctx: EditCtx, ev: NewEvent): { notes: NoteEvent[]; id: string } {
-  const v = ev.voice;
+  const v = targetVoice(notes, ev);
   const chord = notes.filter(n => n.pitch && n.voice === v && same(n.offset, ev.offset));
   if (chord.length && !ev.insert) {
     if (ev.pitch) {
@@ -262,10 +278,59 @@ export function toggleTie(notes: NoteEvent[], id: string): NoteEvent[] {
   });
 }
 
-/** Change la voix d'un évènement (sans toucher à sa position). */
-export function setVoice(notes: NoteEvent[], id: string, voice: number): NoteEvent[] {
-  return sortNotes(updateNote(notes, id, n => ({ ...n, voice })));
+// ---------- Polyphonie : déplacer dans le temps, changer de voix ----------
+//
+// Audiveris place parfois les notes d'une seconde voix à la suite de la première au lieu de les
+// superposer (la mesure déborde alors d'un ou deux temps). On corrige en déplaçant l'accord fautif dans
+// le temps et en le passant dans une autre voix : chaque voix retombe sur la métrique.
+
+/** Déplace la note (avec son accord) ou le silence de `delta` noires, sans toucher au reste. */
+export function moveInTime(notes: NoteEvent[], ctx: EditCtx, id: string, delta: number): NoteEvent[] {
+  const t = notes.find(n => n.id === id);
+  if (!t || same(delta, 0)) return notes;
+  const to = Math.max(0, t.offset + delta);
+  if (same(to, t.offset)) return notes;
+  const slot = slotOf(notes, t);
+  const ids = new Set(slot.map(n => n.id));
+  // les silences de la voix recouverts à l'arrivée cèdent la place
+  const others = trimRests(notes.filter(n => !ids.has(n.id)), t.voice, to, to + t.duration, ctx);
+  const moved = slot.map(n => ({ ...n, offset: to, manual: true }));
+  return sortNotes(keepManual([...others, ...moved], t.voice));
 }
+
+/** Passe la note (avec son accord) ou le silence dans la voix `voice`, à la même position. */
+export function setVoice(notes: NoteEvent[], ctx: EditCtx, id: string, voice: number): NoteEvent[] {
+  const t = notes.find(n => n.id === id);
+  if (!t || t.voice === voice || voice < 1) return notes;
+  const slot = slotOf(notes, t);
+  const ids = new Set(slot.map(n => n.id));
+  const others = trimRests(notes.filter(n => !ids.has(n.id)), voice, t.offset, t.offset + t.duration, ctx);
+  const moved = slot.map(n => ({ ...n, voice, manual: true }));
+  return sortNotes(keepManual([...others, ...moved], voice));
+}
+
+/**
+ * Ramène une mesure-ligne à la métrique `len` : ce qui commence au-delà de la barre est supprimé, ce qui
+ * la franchit est raccourci. Annulable comme toute correction ; à réserver au contenu vraiment en trop
+ * (pour une seconde voix mal placée, mieux vaut déplacer et changer de voix).
+ */
+export function fitToMeter(notes: NoteEvent[], ctx: EditCtx, len: number): NoteEvent[] {
+  if (!notes.some(n => end(n) > len + EPS)) return notes;
+  const out: NoteEvent[] = [];
+  for (const n of notes) {
+    if (n.offset >= len - EPS) continue;
+    if (end(n) > len + EPS) {
+      const { tie: _tie, ...rest } = n;   // une note coupée à la barre n'est plus liée à la suivante
+      void _tie;
+      out.push({ ...rest, duration: len - n.offset, manual: true });
+    } else out.push(n);
+  }
+  if (!out.length) return restsBetween(0, len, 1, ctx);
+  return sortNotes(keepManual(out, out[0].voice));
+}
+
+/** Fin du contenu d'une mesure-ligne, toutes voix confondues. */
+export const contentEnd = (notes: NoteEvent[]): number => Math.max(0, ...notes.map(end));
 
 // ---------- Paroles ----------
 
@@ -338,8 +403,8 @@ export interface Snap {
 /**
  * Position temporelle aimantée : début d'un évènement de la voix (pour former un accord) s'il est à
  * moins de `tol`, sinon le plus proche des fins d'évènements et des points de la grille
- * (pas = min(figure, 1 temps)). La grille évite l'intérieur des notes de la voix ; elle s'étend
- * jusqu'à la fin de la mesure, ou du contenu s'il déborde.
+ * (pas = min(figure, 1 temps)). La grille couvre aussi l'intérieur des notes : une note posée là passe
+ * dans une autre voix (targetVoice). Elle s'étend jusqu'à la fin de la mesure, ou du contenu s'il déborde.
  */
 export function snapOffset(t: number, notes: NoteEvent[], voice: number, figure: number, len: number, tol: number): Snap {
   const own = notes.filter(n => n.voice === voice);
@@ -355,8 +420,7 @@ export function snapOffset(t: number, notes: NoteEvent[], voice: number, figure:
   const cands: Snap[] = [...starts];
   for (const n of own) if (end(n) < limit - EPS) cands.push({ offset: end(n), kind: 'end' });
   const g = Math.min(figure, 1);
-  const inside = (x: number) => own.some(n => n.pitch && n.offset < x - EPS && end(n) > x + EPS);
-  for (let k = 0; k * g < limit - EPS && k < 512; k++) if (!inside(k * g)) cands.push({ offset: k * g, kind: 'grid' });
+  for (let k = 0; k * g < limit - EPS && k < 512; k++) cands.push({ offset: k * g, kind: 'grid' });
   for (const c of cands) {
     const d = Math.abs(c.offset - t);
     if (d < bestD - EPS) { best = c; bestD = d; }

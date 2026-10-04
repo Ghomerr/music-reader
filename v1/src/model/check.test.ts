@@ -36,6 +36,17 @@ describe('timeline', () => {
   test('mesure 0 vide : pas une anacrouse', () => {
     expect(timeline(proj(2, [n(1, 0, 4)]))[0]).toEqual({ start: 0, len: 4, expected: 4 });
   });
+  test('seules les lignes cochées (ou demandées) allongent une mesure qui déborde', () => {
+    // ligne 0 juste, ligne 1 à 5 temps dans la 1re mesure
+    const p = proj(2, [n(0, 0, 4), n(1, 0, 4)], [n(0, 0, 4), n(0, 4, 1), n(1, 0, 4)]);
+    expect(timeline(p).map(t => t.len)).toEqual([5, 4]);
+    p.settings.lines['1|1'].enabled = false;
+    expect(timeline(p).map(t => t.len)).toEqual([4, 4]);
+    expect(timeline(p, ['0|1', '1|1']).map(t => t.len)).toEqual([5, 4]);
+    expect(timeline(p, ['0|1'])[1].start).toBe(4);
+    // le diagnostic, lui, ne dépend pas des lignes cochées
+    expect(findIssues(p).some(i => i.lineId === '1|1' && i.measure === 0)).toBe(true);
+  });
 });
 
 describe('findIssues', () => {

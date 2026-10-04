@@ -40,10 +40,27 @@ projet rechargé).
 - **Modifier** : cliquer une note pour la sélectionner, puis ↑/↓ (ou la faire glisser), ♯ ♭ ♮, une autre figure,
   « liée à la suivante », ou Suppr. Avec « décaler la suite » (coché par défaut), changer une durée ou supprimer
   une note recale la suite de la voix : une croche lue comme une noire se corrige d'un geste.
+- **Notes superposées** : une note posée à l'intérieur d'une autre (une noire au temps 2 sous une blanche du
+  temps 1) passe d'elle-même dans une voix libre, annoncée par l'étiquette (« La4 · voix 2 »). Une note ou un
+  accord sélectionné se déplace avec « ◀ plus tôt / plus tard ▶ » (Maj+←/→, par pas de sa figure, au plus un
+  temps) et change de voix avec le sélecteur « voix » (V).
+- **Seconde voix mal placée** : Audiveris met parfois la seconde voix d'une portée à la suite de la première
+  au lieu de la superposer, et la mesure déborde d'un temps (Over The Rainbow, mesures 3, 11 et 16 du piano).
+  On la recale en déplaçant ses accords et en les passant en voix 2 : chaque voix retombe sur la métrique.
+- **« ✂ Ramener à 4/4 »** (par ligne, ou pour toute la mesure) : coupe ce qui dépasse la barre de mesure, quand
+  le contenu en trop est vraiment de trop.
 - **Paroles** : un champ sous chaque note ; un trait d'union final (« Là- ») lie la syllabe à la suivante.
 - « Écouter la mesure », « Marquer comme vérifiée », mesure précédente / suivante (PgPréc / PgSuiv).
 - Raccourcis : 1–6 pour les figures, « . » pour le point, flèches, Suppr, Échap. **Ctrl+Z / Ctrl+Y** annulent et
   rétablissent les corrections (pas les réglages d'écoute).
+- L'extrait d'origine, les diagnostics et la palette restent en place ; seules les portées défilent.
+
+**Lignes affichées.** Une ligne décochée dans le panneau d'écoute n'est plus jouée, ni affichée sur la partition,
+dans l'éditeur ou dans la liste à relire (qui indique combien de points elle masque). Elle n'allonge plus non
+plus les mesures : une mesure dure sa métrique, ou le contenu le plus long **des lignes cochées** s'il déborde.
+Si l'on n'écoute que le chant, il reste en 4/4 même quand le piano déborde encore. En contrepartie, cocher ou
+décocher une ligne peut déplacer les mesures suivantes dans le temps. L'impression applique la même règle aux
+lignes imprimées.
 
 Les diagnostics sont recalculés à chaque correction : une mesure réparée perd sa couleur aussitôt. Une note
 posée ou modifiée à la main est marquée comme telle (en indigo) et **survit à une réanalyse** de sa page, de même

@@ -20,12 +20,14 @@ function indexByMeasure(notes: NoteEvent[], nMeasures: number): (NoteEvent[] | u
   return out;
 }
 
-/** Fin du contenu le plus long de chaque mesure, toutes lignes confondues. */
-function maxEnds(p: Project): number[] {
+/** Fin du contenu le plus long de chaque mesure, sur les lignes retenues. */
+function maxEnds(p: Project, keep: (id: string) => boolean): number[] {
   const ends = new Array<number>(p.measures.length).fill(0);
-  for (const l of p.lines)
+  for (const l of p.lines) {
+    if (!keep(l.id)) continue;
     for (const n of l.notes)
       if (n.measure >= 0 && n.measure < ends.length) ends[n.measure] = Math.max(ends[n.measure], n.offset + n.duration);
+  }
   return ends;
 }
 
@@ -35,9 +37,16 @@ const isPickup = (i: number, maxEnd: number, expected: number) =>
 /**
  * Place chaque mesure dans le temps. Durée d'une mesure = durée attendue (métrique), ou le contenu le
  * plus long s'il déborde ; la première mesure plus courte que la métrique est une anacrouse.
+ *
+ * Seules comptent les lignes `lineIds` (par défaut : les lignes cochées à l'écoute). Une ligne mal lue
+ * qu'on a décochée n'allonge donc plus les mesures des autres : on écoute et on voit le chant en 4/4 même
+ * si le piano déborde encore. En contrepartie, cocher ou décocher une ligne peut déplacer les mesures
+ * suivantes dans le temps.
  */
-export function timeline(p: Project): MeasureTime[] {
-  const ends = maxEnds(p);
+export function timeline(p: Project, lineIds?: string[]): MeasureTime[] {
+  const ids = lineIds && new Set(lineIds);
+  const keep = (id: string) => (ids ? ids.has(id) : p.settings.lines[id]?.enabled !== false);
+  const ends = maxEnds(p, keep);
   let start = 0;
   return p.measures.map((m, i) => {
     const expected = expectedLen(m);
@@ -84,7 +93,7 @@ function gaps(notes: NoteEvent[], end: number): { at: number; len: number }[] {
 export function findIssues(p: Project): Issue[] {
   const nM = p.measures.length;
   const checked = new Set(p.review.checked);
-  const ends = maxEnds(p);
+  const ends = maxEnds(p, () => true);   // anacrouse jugée sur toutes les lignes, cochées ou non
   const lineOrder = new Map(p.lines.map((l, i) => [l.id, i]));
   const byLine = new Map(p.lines.map(l => [l.id, indexByMeasure(l.notes, nM)]));
   const out: Issue[] = [];

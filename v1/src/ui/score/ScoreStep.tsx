@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import type { Issue, IssueKind, MeasureTime } from '../../model/types';
 import { findIssues, timeline } from '../../model/check';
 import { writeMusicXml } from '../../model/musicxml-write';
-import { measureAt } from '../../audio/perform';
+import { lineSettingsOf, measureAt } from '../../audio/perform';
 import { setState, useStore } from '../../state/store';
 import { OsmdView } from '../common/OsmdView';
 import { PlayerPanel } from '../player/PlayerPanel';
@@ -37,10 +37,17 @@ export function ScoreStep() {
   // chaque cran du curseur de tempo.
   const measures = project?.measures, lines = project?.lines, review = project?.review;
 
-  const issues = useMemo(() => (project ? attempt(() => findIssues(project), [] as Issue[]) : { value: [], error: null }),
+  // Une ligne décochée dans le panneau d'écoute disparaît aussi de la partition et de la liste à relire.
+  // La clé ne change que si l'ensemble des lignes cochées change (pas quand on règle un volume).
+  const visibleKey = project ? project.lines.filter(l => lineSettingsOf(project.settings, l).enabled).map(l => l.id).join(',') : '';
+  const visible = useMemo(() => new Set(visibleKey ? visibleKey.split(',') : []), [visibleKey]);
+
+  const allIssues = useMemo(() => (project ? attempt(() => findIssues(project), [] as Issue[]) : { value: [], error: null }),
     [measures, lines, review]);
-  const times = useMemo(() => (project ? attempt(() => timeline(project), [] as MeasureTime[]).value : []),
-    [measures, lines]);
+  const issues = useMemo(() => ({ ...allIssues, value: allIssues.value.filter(i => visible.has(i.lineId)) }), [allIssues, visible]);
+  const hidden = allIssues.value.filter(i => !i.checked && !visible.has(i.lineId)).length;
+  const times = useMemo(() => (project ? attempt(() => timeline(project, [...visible]), [] as MeasureTime[]).value : []),
+    [measures, lines, visible]);
   const playing = useStore(s => {
     if (s.playhead == null || !times.length) return null;
     const i = measureAt(times, s.playhead);
@@ -57,20 +64,22 @@ export function ScoreStep() {
     return map;
   }, [issues]);
 
-  const xml = useMemo(() => (project
-    ? attempt(() => writeMusicXml(project, { colors: xmlColors, keepLayout, lyrics: true }), '')
+  // writeMusicXml écrit toutes les lignes quand on ne lui en donne aucune : rien de coché = rien à afficher.
+  const xml = useMemo(() => (project && visible.size
+    ? attempt(() => writeMusicXml(project, { lines: [...visible], colors: xmlColors, keepLayout, lyrics: true }), '')
     : { value: '', error: null }),
-  [measures, lines, project?.title, xmlColors, keepLayout]);
+  [measures, lines, project?.title, visible, xmlColors, keepLayout]);
 
   // writeMusicXml regroupe les lignes par partie, dans l'ordre d'apparition : même ordre pour les portées.
   const lineOrder = useMemo(() => {
     const parts = new Map<number, string[]>();
     for (const l of lines ?? []) {
+      if (!visible.has(l.id)) continue;
       const g = parts.get(l.part);
       if (g) g.push(l.id); else parts.set(l.part, [l.id]);
     }
     return [...parts.values()].flat();
-  }, [lines]);
+  }, [lines, visible]);
 
   const cellColors = useMemo(() => {
     const map = new Map<string, string>();
@@ -81,6 +90,7 @@ export function ScoreStep() {
     }
     if (selection) {
       for (const l of lines ?? []) {
+        if (!visible.has(l.id)) continue;
         const k = `${selection.measure}|${l.id}`;
         // la mesure ouverte garde sa couleur de diagnostic sur les autres lignes
         if (l.id === selection.lineId) map.set(k, CELL.openLine);
@@ -88,7 +98,7 @@ export function ScoreStep() {
       }
     }
     return map;
-  }, [issues, selection, lines]);
+  }, [issues, selection, lines, visible]);
 
   if (!project) return null;
   const error = issues.error ?? xml.error;
@@ -115,6 +125,7 @@ export function ScoreStep() {
             <small className="muted">Cliquer sur une mesure pour la corriger.</small>
           </div>
           {error && <div className="note err">Partition impossible à écrire : {error}</div>}
+          {!visible.size && <div className="note info">Aucune ligne cochée : cochez au moins une ligne dans « Lignes » pour afficher la partition.</div>}
           {xml.value && (
             <OsmdView xml={xml.value} keepLayout={keepLayout} zoom={zoom} lineOrder={lineOrder} firstMeasure={0}
                       cellColors={cellColors} playingMeasure={playing} scrollToMeasure={selection?.measure ?? null}
@@ -125,10 +136,10 @@ export function ScoreStep() {
       <div className="score-side">
         {/* reste monté pendant toute l'étape : son démontage met la lecture en pause */}
         <PlayerPanel />
-        <IssueList project={project} issues={issues.value} selected={selection?.measure ?? null} />
+        <IssueList project={project} issues={issues.value} selected={selection?.measure ?? null} hidden={hidden} />
       </div>
-      {selection && project.measures[selection.measure] && (
-        <MeasureEditor project={project} issues={issues.value} selection={selection} />
+      {selection && project.measures[selection.measure] && visible.size > 0 && (
+        <MeasureEditor project={project} issues={issues.value} selection={selection} visibleLines={visible} />
       )}
     </div>
   );

@@ -63,8 +63,10 @@ function Panel({ project }: { project: Project }) {
   const playing = player.isPlaying();
   void version;   // relu à chaque changement d'état du lecteur
 
-  // La timeline ne dépend que des mesures et des notes : pas recalculée quand un réglage change.
-  const times = useMemo(() => timeline(project), [project.measures, project.lines]);
+  // La timeline dépend des mesures, des notes et des lignes cochées (seules elles allongent une mesure
+  // qui déborde) : pas recalculée quand on change le tempo ou un volume.
+  const enabledKey = project.lines.filter(l => lineSettingsOf(settings, l).enabled).map(l => l.id).join(',');
+  const times = useMemo(() => timeline(project), [project.measures, project.lines, enabledKey]);
   const total = totalBeats(times);
   const noteCounts = useMemo(() => project.lines.map(l => l.notes.filter(n => n.pitch).length), [project.lines]);
   const anyEnabled = project.lines.some(l => lineSettingsOf(settings, l).enabled);
@@ -200,12 +202,13 @@ function Panel({ project }: { project: Project }) {
 
       <div className="card">
         <div className="row pl-head">
-          <h3>Lignes à jouer</h3>
+          <h3>Lignes</h3>
           <span className="row" style={{ gap: 6 }}>
             <button className="btn sm" onClick={() => setEnabled(project.lines, () => true)}>Toutes</button>
             <button className="btn sm" onClick={() => setEnabled(project.lines, () => false)}>Aucune</button>
           </span>
         </div>
+        <small className="pl-cap" style={{ margin: '0 0 8px' }}>Une ligne décochée n&rsquo;est plus jouée, ni affichée sur la partition et dans la liste à relire.</small>
         {project.lines.map((l, i) => {
           const ls = lineSettingsOf(settings, l);
           return (

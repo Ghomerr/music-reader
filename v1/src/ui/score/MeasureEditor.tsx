@@ -3,13 +3,14 @@
 // ScoreStep sur le nouveau projet, montrent la mesure se « réparer » à vue.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Issue, NoteEvent, Project } from '../../model/types';
-import { durationName, keyLabel, pitchLabel } from '../../model/pitch';
+import { EPS, durationName, keyLabel, pitchLabel } from '../../model/pitch';
 import { editProject, getState, newId, setState } from '../../state/store';
 import { playMeasure } from '../../audio/player';
 import { lineColor } from '../player/colors';
 import {
-  FIGURES, deleteEvent, figureDuration, figureOf, insertEvent, measureLength, measureNotes, movePitch, replaceMeasureNotes,
-  setAlter, setDuration, setLyric, toggleTie, versesOf, type EditCtx, type Figure, type NewEvent,
+  FIGURES, contentEnd, deleteEvent, figureDuration, figureOf, fitToMeter, insertEvent, measureLength, measureNotes, moveInTime,
+  movePitch, replaceMeasureNotes, setAlter, setDuration, setLyric, setVoice as setVoiceOf, toggleTie, versesOf,
+  type EditCtx, type Figure, type NewEvent,
 } from './edit';
 import { FigureIcon } from './Glyphs';
 import { KIND_LABEL, kindClass } from './IssueList';
@@ -20,11 +21,13 @@ interface Props {
   project: Project;
   issues: Issue[];
   selection: { measure: number; lineId?: string };
+  /** lignes cochées dans le panneau d'écoute : les autres ne sont pas affichées */
+  visibleLines?: Set<string>;
 }
 
 const isField = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]');
 
-export function MeasureEditor({ project, issues, selection }: Props) {
+export function MeasureEditor({ project, issues, selection, visibleLines }: Props) {
   const m = selection.measure;
   const measure = project.measures[m];
   const [fig, setFig] = useState<Figure>({ base: 1, dots: 0, triplet: false });
@@ -44,7 +47,8 @@ export function MeasureEditor({ project, issues, selection }: Props) {
   useEffect(() => { if (sel && !selNote) setSel(null); }, [sel, selNote]);
   useEffect(() => { setSel(null); }, [m]);
 
-  const activeLine = sel?.lineId ?? selection.lineId ?? project.lines[0]?.id;
+  const shown = (id: string) => !visibleLines || visibleLines.has(id);
+  const activeLine = sel?.lineId ?? selection.lineId ?? project.lines.find(l => shown(l.id))?.id;
 
   // La ligne visée (clic sur la partition ou la liste) est amenée à l'écran dans le tiroir.
   useEffect(() => {
@@ -122,6 +126,23 @@ export function MeasureEditor({ project, issues, selection }: Props) {
     onSel((ns, c, id) => deleteEvent(ns, c, id));
     setSel(null);
   };
+  // Polyphonie : une seconde voix qu'Audiveris a mise à la suite de la première se recale en déplaçant
+  // l'accord dans le temps (pas = sa figure, au plus un temps) et en le changeant de voix.
+  const step = selNote ? Math.min(1, selNote.duration) : 1;
+  const stepLabel = durationName(step);
+  const nudge = (dir: number) => onSel((ns, c, id) => moveInTime(ns, c, id, dir * step));
+  /** Lignes affichées dont le contenu dépasse la barre de mesure. */
+  const overflowing = project.lines.filter(l => shown(l.id) && contentEnd(measureNotes(l, m)) > len + EPS).map(l => l.id);
+  /** Coupe à la métrique, en une seule correction (un seul Ctrl+Z) pour toutes les lignes demandées. */
+  const fit = (lineIds: string[]) => editProject(d => {
+    for (const id of lineIds) {
+      const dl = d.lines.find(l => l.id === id);
+      if (!dl) continue;
+      const before = measureNotes(dl, m);
+      const after = fitToMeter(before, ctx(), len);
+      if (after !== before) replaceMeasureNotes(dl, m, after);
+    }
+  });
   const toggleChecked = (lineId: string) => editProject(d => {
     const k = `${m}|${lineId}`;
     const i = d.review.checked.indexOf(k);
@@ -141,6 +162,10 @@ export function MeasureEditor({ project, issues, selection }: Props) {
     else if ((k === 'ArrowUp' || k === 'ArrowDown') && selNote?.pitch) {
       const steps = (k === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 7 : 1);
       onSel((ns, c, id) => movePitch(ns, c, id, steps));
+    } else if ((k === 'ArrowLeft' || k === 'ArrowRight') && e.shiftKey && selNote) {
+      nudge(k === 'ArrowLeft' ? -1 : 1);
+    } else if ((k === 'v' || k === 'V') && selNote) {
+      onSel((ns, c, id) => setVoiceOf(ns, c, id, (selNote.voice % (maxVoice + 1)) + 1));
     } else if (k === 'ArrowLeft' || k === 'ArrowRight') {
       const dir = k === 'ArrowLeft' ? -1 : 1;
       const line = sel && project.lines.find(l => l.id === sel.lineId);
@@ -180,8 +205,10 @@ export function MeasureEditor({ project, issues, selection }: Props) {
       </header>
 
       <div className="me-body" ref={bodyRef}>
+        {/* Original, diagnostics et outils restent en place ; seules les portées défilent (.me-lines). */}
         <div className="me-top">
           <OriginalExcerpt measure={measure} />
+          <div className="me-side">
           <ul className="me-issues">
             {mIssues.length === 0 && <li className="muted">Aucun diagnostic sur cette mesure.</li>}
             {mIssues.map((i, k) => (
@@ -191,7 +218,12 @@ export function MeasureEditor({ project, issues, selection }: Props) {
               </li>
             ))}
           </ul>
-        </div>
+          {overflowing.length > 0 && (
+            <button className="btn sm" onClick={() => fit(overflowing)}
+                    title="Coupe, sur les lignes affichées, ce qui dépasse la barre de mesure (annulable)">
+              ✂ Ramener la mesure à {measure.beats}/{measure.beatType}
+            </button>
+          )}
 
         <div className="me-tools" role="toolbar" aria-label="Figures et outils">
           <div className="me-palette">
@@ -246,16 +278,29 @@ export function MeasureEditor({ project, issues, selection }: Props) {
                             onClick={() => onSel((ns, _c, id) => toggleTie(ns, id))}>⁀ liée à la suivante</button>
                   </>
                 )}
+                <button className="btn sm" title={`Plus tôt, par pas de ${stepLabel} (Maj+←)`} onClick={() => nudge(-1)}>◀ plus tôt</button>
+                <button className="btn sm" title={`Plus tard, par pas de ${stepLabel} (Maj+→)`} onClick={() => nudge(1)}>plus tard ▶</button>
+                <label className="me-voice" title="Passer la note (et son accord) dans une autre voix, à la même position (V)">
+                  voix{' '}
+                  <select value={selNote.voice} onChange={e => onSel((ns, c, id) => setVoiceOf(ns, c, id, +e.target.value))}>
+                    {Array.from({ length: maxVoice + 1 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
+                  </select>
+                </label>
                 <button className="btn sm danger" title="Supprimer (Suppr)" onClick={remove}>Supprimer</button>
               </>
             ) : (
               <small className="muted">Cliquer sur la portée pose la figure choisie ; cliquer sur une note la sélectionne (glisser pour la déplacer).
-                Clavier : 1–6 figures, « . » point, T triolet, R silence, ↑↓ hauteur, ←→ note voisine, Suppr, Échap.</small>
+                Clavier : 1–6 figures, « . » point, T triolet, R silence, ↑↓ hauteur, ←→ note voisine, Maj+←→ plus tôt / plus tard, V voix suivante, Suppr, Échap.</small>
             )}
           </div>
         </div>
+          </div>
+        </div>
 
+        <div className="me-lines">
         {project.lines.map((line, rank) => {
+          // rank pris sur toutes les lignes : même couleur que dans le panneau d'écoute
+          if (!shown(line.id)) return null;
           const key = `${m}|${line.id}`;
           const checked = project.review.checked.includes(key);
           const li = mIssues.filter(i => i.lineId === line.id);
@@ -271,6 +316,12 @@ export function MeasureEditor({ project, issues, selection }: Props) {
                         onClick={() => setLyricToggles(s => { const n = new Set(s); if (n.has(line.id)) n.delete(line.id); else n.add(line.id); return n; })}>
                   paroles
                 </button>
+                {contentEnd(measureNotes(line, m)) > len + EPS && (
+                  <button className="btn sm" onClick={() => fit([line.id])}
+                          title="Coupe ce qui dépasse la barre de mesure sur cette ligne (annulable). Pour une seconde voix mal placée, mieux vaut la déplacer.">
+                    ✂ Ramener à {measure.beats}/{measure.beatType}
+                  </button>
+                )}
                 <button className="btn sm" onClick={() => playMeasure(m, line.id)} title="Écouter cette ligne seule">▶</button>
                 <button className={'btn sm' + (checked ? ' sel' : '')} aria-pressed={checked} onClick={() => toggleChecked(line.id)}
                         title="La mesure est juste pour cette ligne (ou acceptée telle quelle)">
@@ -286,6 +337,7 @@ export function MeasureEditor({ project, issues, selection }: Props) {
             </section>
           );
         })}
+        </div>
       </div>
     </aside>
   );

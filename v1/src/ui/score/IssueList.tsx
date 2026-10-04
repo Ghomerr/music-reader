@@ -26,7 +26,16 @@ export function Legend() {
   );
 }
 
-export function IssueList({ project, issues, selected }: { project: Project; issues: Issue[]; selected: number | null }) {
+interface Props {
+  project: Project;
+  /** diagnostics des seules lignes affichées */
+  issues: Issue[];
+  selected: number | null;
+  /** diagnostics non validés sur des lignes décochées (masqués, mais signalés) */
+  hidden?: number;
+}
+
+export function IssueList({ project, issues, selected, hidden = 0 }: Props) {
   const groups = useMemo(() => {
     const g = new Map<number, Issue[]>();
     for (const i of issues) {
@@ -49,8 +58,15 @@ export function IssueList({ project, issues, selected }: { project: Project; iss
         <span className={'badge ' + (remaining ? 'warn' : 'ok')}>{remaining} à relire</span>
         {validated > 0 && <span className="badge">{validated} validé{validated > 1 ? 's' : ''}</span>}
       </div>
+      {hidden > 0 && (
+        <small className="muted issues-hidden">
+          + {hidden} point{hidden > 1 ? 's' : ''} à relire sur des lignes décochées (masqué{hidden > 1 ? 's' : ''}).
+        </small>
+      )}
       {issues.length === 0 ? (
-        <p className="note ok">Aucune mesure signalée : toutes les durées retombent sur la métrique.</p>
+        <p className="note ok">{hidden
+          ? 'Aucune mesure signalée sur les lignes affichées.'
+          : 'Aucune mesure signalée : toutes les durées retombent sur la métrique.'}</p>
       ) : (
         <>
           <button className="btn primary sm" disabled={!next} onClick={() => next && open(next.measure, next.lineId)}>

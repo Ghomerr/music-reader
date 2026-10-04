@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent, Pitch, Step } from '../../model/types';
 import {
-  clefAt, clefBottom, decompose, deleteEvent, figureDuration, figureOf, flagCount, insertEvent, keySignature,
-  lyricDisplay, measureBox, movePitch, setAlter, setDuration, setLyric, snapOffset, toggleTie, type EditCtx,
+  clefAt, clefBottom, contentEnd, decompose, deleteEvent, figureDuration, figureOf, fitToMeter, flagCount, insertEvent,
+  keySignature, lyricDisplay, measureBox, moveInTime, movePitch, setAlter, setDuration, setLyric, setVoice, snapOffset,
+  toggleTie, type EditCtx,
 } from './edit';
 
 const P = (s: string): Pitch => ({ step: s[0] as Step, alter: 0, octave: +s.slice(1) });
@@ -171,9 +172,9 @@ describe('aimantation', () => {
   it('préfère le début d\'une note proche (accord)', () => {
     expect(snapOffset(1.1, notes, 1, 0.5, 4, 0.25)).toEqual({ offset: 1, kind: 'chord' });
   });
-  it('évite l\'intérieur des notes de la voix', () => {
-    // 2 est à l'intérieur de la blanche (1..3) : on aimante à sa fin
-    expect(snapOffset(2.4, notes, 1, 0.5, 4, 0.2).offset).toBe(3);
+  it("aimante aussi à l'intérieur des notes (la note posée y passera dans une autre voix)", () => {
+    // 2,5 est à l'intérieur de la blanche (1..3) : la grille de croches y reste disponible
+    expect(snapOffset(2.4, notes, 1, 0.5, 4, 0.2).offset).toBe(2.5);
   });
   it('grille = min(figure, 1 temps)', () => {
     expect(snapOffset(3.6, notes, 1, 0.5, 4, 0.1).offset).toBe(3.5);
@@ -215,5 +216,69 @@ describe('extrait de l\'original', () => {
     expect(measureBox(layout, 1)!.w).toBe(1930 - 570);
     expect(measureBox({ ...layout, width: 1910 }, 1)!.w).toBe(1910 - 570);   // bornée à l'image
     expect(measureBox(layout, 3)).toBeNull();
+  });
+});
+
+describe('polyphonie', () => {
+  // Over The Rainbow, page 1, mesure 3, main droite telle que lue par Audiveris : la seconde voix est mise
+  // à la suite de la première (5 temps) et le Mi bémol final est perdu.
+  const read = () => [
+    ev('c', 0, 2, 'C4'), ev('a', 2, 1, 'A3'), ev('e', 3, 1, 'E4'),
+    ev('a2', 3, 2, 'A3', 2), ev('f2', 3, 2, 'F4', 2),
+  ];
+  const at = (ns: NoteEvent[], v: number) => sum(ns.filter(n => n.voice === v));
+
+  it("se corrige en déplaçant et en changeant de voix", () => {
+    const c = ctx();
+    let ns = read();
+    expect(contentEnd(ns)).toBe(5);
+    ns = setVoice(ns, c, 'a', 2);              // La noire → voix 2…
+    ns = moveInTime(ns, c, 'a', -1);           // …au 2e temps
+    ns = insertEvent(ns, c, { offset: 1, duration: 1, pitch: P('F4'), voice: 2 }).notes;   // accord La/Fa
+    ns = moveInTime(ns, c, 'e', -1);           // Mi au 3e temps
+    ns = moveInTime(ns, c, 'a2', -1);          // l'accord Fa/La blanche suit en bloc
+    ns = insertEvent(ns, c, { offset: 3, duration: 1, pitch: { step: 'E', alter: -1, octave: 4 }, voice: 1 }).notes;
+    expect(at(ns, 1)).toBe('0:C4/2 2:E4/1 3:E4/1');
+    expect(at(ns, 2)).toBe('1:A3/1 1:F4/1 2:A3/2 2:F4/2');
+    expect(contentEnd(ns)).toBe(4);
+    expect(ns.filter(n => ['a', 'e', 'a2', 'f2'].includes(n.id)).every(n => n.manual)).toBe(true);
+  });
+
+  it('un déplacement mange les silences de la voix et ne passe pas avant le début', () => {
+    const ns = moveInTime([ev('r', 0, 2, null), ev('n', 2, 1, 'G4')], ctx(), 'n', -1);
+    expect(sum(ns)).toBe('0:-/1 1:G4/1');
+    expect(sum(moveInTime([ev('n', 0.5, 1, 'G4')], ctx(), 'n', -2))).toBe('0:G4/1');
+  });
+
+  it("changer de voix emporte tout l'accord", () => {
+    const ns = setVoice([ev('a', 0, 1, 'C4'), ev('b', 0, 1, 'E4'), ev('r', 0, 4, null, 2)], ctx(), 'b', 2);
+    expect(ns.filter(n => n.voice === 2 && n.pitch).map(n => n.id).sort()).toEqual(['a', 'b']);
+    expect(at(ns, 2)).toBe('0:C4/1 0:E4/1 1:-/3');   // le silence de la voix 2 a cédé la place
+  });
+
+  it('ramener à la métrique coupe ce qui dépasse', () => {
+    const ns = fitToMeter(read(), ctx(), 4);
+    expect(sum(ns)).toBe('0:C4/2 2:A3/1 3:E4/1 3:A3/1 3:F4/1');
+    expect(ns.find(n => n.id === 'a2')!.manual).toBe(true);
+    const juste = [ev('x', 0, 4, 'C4')];
+    expect(fitToMeter(juste, ctx(), 4)).toBe(juste);
+    expect(sum(fitToMeter([ev('y', 4, 1, 'C4')], ctx(), 4))).toBe('0:-/4');
+  });
+});
+
+describe('notes superposées', () => {
+  it("blanche au temps 1 : une noire posée au temps 2 passe en voix 2 au lieu d'être repoussée", () => {
+    const notes = [ev('h', 0, 2, 'C4'), ev('r', 2, 2, null)];
+    expect(snapOffset(1.05, notes, 1, 1, 4, 0.1).offset).toBe(1);
+    const r = insertEvent(notes, ctx(), { offset: 1, duration: 1, pitch: P('A4'), voice: 1 });
+    const n = r.notes.find(x => x.id === r.id)!;
+    expect([n.offset, n.voice]).toEqual([1, 2]);
+    expect(sum(r.notes.filter(x => x.voice === 1))).toBe('0:C4/2 2:-/2');   // la voix 1 n'a pas bougé
+    // une troisième note par-dessus les deux : voix 3
+    const r2 = insertEvent(r.notes, ctx(), { offset: 1.5, duration: 0.5, pitch: P('E5'), voice: 1 });
+    expect(r2.notes.find(x => x.id === r2.id)!.voice).toBe(3);
+    // au début de la blanche, c'est toujours un accord dans la voix 1
+    const r3 = insertEvent(notes, ctx(), { offset: 0, duration: 1, pitch: P('E4'), voice: 1 });
+    expect(r3.notes.find(x => x.id === r3.id)!.voice).toBe(1);
   });
 });
