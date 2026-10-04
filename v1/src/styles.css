@@ -61,6 +61,8 @@ input[type=range],input[type=checkbox]{accent-color:var(--accent)}
 .step.cur{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .step.cur b{background:var(--accent);color:var(--accent-ink)}
 .app-main{max-width:1400px;margin:0 auto;padding:16px 16px 60px;display:flex;flex-direction:column;gap:16px}
+.brand .twitter{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;color:var(--muted)}
+.brand .twitter:hover{color:#1d9bf0;background:var(--surface-2)}
 
 @media print{
   .app-header,.no-print{display:none!important}
