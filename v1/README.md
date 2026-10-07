@@ -135,7 +135,53 @@ symboles vus par Audiveris mais absents du résultat) :
   découpage est alors la k-ième mesure du MusicXML.
 - Le serveur sert aussi l'interface construite (`dist/`).
 
-## Installation (Windows)
+## Application de bureau (Windows, Mac, Linux)
+
+Le logiciel se distribue aussi comme une application à télécharger, **sans installation** : l'interface s'ouvre
+dans sa propre fenêtre, et le serveur comme Audiveris (Java compris) et les modèles OCR sont embarqués. Aucune
+connexion n'est nécessaire, et la mémoire de l'ordinateur suffit largement (une page : moins de 500 Mo).
+
+| Système | Fichier | Utilisation |
+|---|---|---|
+| Windows | `LectONote-…-windows-portable.zip` | décompresser une fois, puis double-clic sur *Lect'O'Note Matic 3000.exe* |
+| Windows | `LectONote-…-windows-installation.exe` | installateur classique (menu Démarrer, désinstallation), au choix |
+| Mac Apple Silicon (M1…) | `LectONote-…-mac-arm64.dmg` | ouvrir l'image disque, lancer l'application (ou la glisser dans Applications) |
+| Mac Intel | `LectONote-…-mac-x64.dmg` | idem |
+| Linux | `LectONote-…-linux-x86_64.AppImage` | rendre exécutable, puis lancer |
+
+**Rien n'est écrit sur la machine** : le profil du navigateur intégré, les pages analysées, la configuration et
+les journaux d'Audiveris vont dans un dossier temporaire propre à chaque lancement, effacé à la fermeture (et au
+lancement suivant si l'application a été interrompue). Restent seulement les fichiers exportés par l'utilisateur
+(projet, audio, MusicXML), là où il les range. Audiveris choisit ses dossiers d'après `APPDATA` (Windows),
+`XDG_*_HOME` (Linux) ou `HOME` (Mac) : le serveur ne les redirige que pour lui (`AUDIVERIS_HOME`).
+
+**Premier lancement** : l'application n'est pas signée par un éditeur reconnu (certificats payants).
+- Windows : « Windows a protégé votre ordinateur » › *Informations complémentaires* › *Exécuter quand même*.
+- Mac : clic droit sur l'application › *Ouvrir*, puis *Ouvrir* (ou Réglages Système › Confidentialité et
+  sécurité › *Ouvrir quand même*). L'application est signée « ad hoc », ce qui évite le message « endommagée ».
+
+**Construction.** Chaque système se construit sur lui-même, car Audiveris s'extrait de son paquet officiel avec
+les outils du système (`msiexec`, `hdiutil`, `dpkg-deb`) :
+
+```powershell
+npm run desktop:resources       # télécharge et prépare Audiveris + OCR pour ce système (desktop/resources)
+npm run desktop:pack            # construit l'interface puis les paquets (release/)
+npm run desktop:smoke:packaged  # lance l'application packagée et lui fait analyser une image de test
+npm run desktop                 # (développement) lance l'application sans la packager
+```
+
+En intégration continue ([.github/workflows/desktop.yml](../.github/workflows/desktop.yml)), une machine par cible
+(Windows, Mac Apple Silicon, Mac Intel, Linux) prépare le moteur, construit, puis **teste une vraie analyse depuis
+l'application packagée** ; sur Mac, la signature est vérifiée aussi. Un tag `v…` publie une version GitHub avec
+tous les téléchargements.
+
+Mesures sous Windows : fenêtre ouverte en 1,3 s, page de test analysée en 10 s ; archive portable de 240 Mo
+(344 fichiers, décompressée en 11 s), installateur de 184 Mo. Les paquets d'Audiveris contiennent une copie
+inutilisée de ses classes Java (2 471 fichiers) : elle est retirée, après vérification que les résultats restent
+identiques à l'octet près. Le format « portable en un seul .exe » a été écarté : il se redécompresse à chaque
+lancement, et l'antivirus analyse alors tout — 50 s avant l'ouverture.
+
+## Installation du serveur (Windows)
 
 Prérequis : **Node.js 20+**. Audiveris embarque son propre Java.
 
@@ -167,6 +213,7 @@ est le maximum raisonnable, et l'offre à 2 Go est celle qui convient à Audiver
 ## Organisation du code
 
 ```
+desktop/           application de bureau (Electron) : processus principal, préparation du moteur, test packagé
 server/            serveur Node sans dépendance : file d'analyse Audiveris, journal, géométrie (.omr)
 src/model/         modèle interne et tout ce qui en dérive, sans interface
   types.ts           le modèle : notes en (mesure, position dans la mesure, durée), en noires

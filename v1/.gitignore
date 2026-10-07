@@ -1,5 +1,9 @@
-﻿node_modules/
+node_modules/
 dist/
 jobs/
 tools/
 *.tsbuildinfo
+# application de bureau : moteur téléchargé (desktop:resources) et paquets produits (desktop:pack)
+desktop/resources/
+desktop/.cache/
+release/

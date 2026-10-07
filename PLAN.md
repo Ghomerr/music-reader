@@ -171,6 +171,8 @@ Contient la musique analysée, les corrections et les réglages, sans les images
 - **Une page sortait parfois en deux partitions** : Audiveris prend un système en retrait pour le début d'un nouveau mouvement (Fortunio p1, dont seule l'introduction était lue). La détection est désactivée côté serveur.
 - **Décision** : synthèse maison plutôt que Tone.js et des échantillons : rien à télécharger, fonctionne hors ligne, et le même moteur sert à l'export WAV.
 - **À vérifier au déploiement** : le `Dockerfile` n'a pas pu être testé (Docker absent du poste) ; le son n'a été contrôlé que par des tests et une lecture dans Edge, pas à l'oreille sur plusieurs navigateurs et mobiles.
+- **Hébergement gratuit écarté.** Mesuré : une page analysée demande 480 à 510 Mo avec la mémoire de Java plafonnée (713 Mo avec les réglages d'origine du lanceur d'Audiveris), plus ~60 Mo pour le serveur. L'offre gratuite de Render (512 Mo) ne suffit pas ; Hugging Face exige désormais un abonnement pour les applications Docker, Fly.io n'a plus d'offre gratuite. Restaient Google Cloud Run et une petite VM Oracle (carte bancaire, administration).
+- **Décision : application de bureau Electron**, sans installation, pour Windows, Mac (Apple Silicon et Intel) et Linux, avec Audiveris et les modèles OCR embarqués (détails dans [v1/README.md](v1/README.md#application-de-bureau-windows-mac-linux)). Rien n'est écrit sur la machine hors d'un dossier temporaire effacé à la fermeture. Construite et testée par une vraie analyse sur chaque système en intégration continue (GitHub Actions) ; publiée sur la page Releases du dépôt. Vérifiée à la main sous Windows (archive portable, installateur, interface) ; le Mac et Linux ne le sont que par l'intégration continue.
 
 ## 7. Hors V1 (pistes V2)
 

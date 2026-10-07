@@ -1,0 +1,105 @@
+# Application de bureau Lect'O'Note Matic 3000 : construite et testée sur chaque système, une machine par cible
+# (le moteur Audiveris embarqué ne s'extrait que sur son propre système). Chaque paquet est vérifié par une vraie
+# analyse lancée depuis l'application packagée (desktop/smoke-packaged.mjs) ; sur Mac, la signature aussi.
+#
+# - à chaque push sur main touchant v1/ : construction et test, paquets disponibles dans les « artifacts » du run ;
+# - sur un tag v* (ex. v1.0.0) : en plus, publication d'une version GitHub avec tous les téléchargements ;
+# - à la demande (onglet Actions › Run workflow).
+name: Application de bureau
+
+on:
+  push:
+    branches: [main]
+    paths: ['v1/**', '.github/workflows/desktop.yml']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runner: windows-latest
+            builder: --win --x64
+            arch: x64
+          - name: Mac Apple Silicon
+            runner: macos-15
+            builder: --mac --arm64
+            arch: arm64
+          - name: Mac Intel
+            runner: macos-15-intel
+            builder: --mac --x64
+            arch: x64
+          - name: Linux
+            runner: ubuntu-24.04
+            builder: --linux --x64
+            arch: x64
+    defaults:
+      run:
+        working-directory: v1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: v1/package-lock.json
+
+      - name: Dépendances
+        run: npm ci
+
+      - name: Bibliothèques système d'Audiveris et écran virtuel (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2t64 libxtst6 libxi6 libxrender1 xvfb
+
+      - name: Types et tests
+        run: npm run typecheck && npm test
+
+      - name: Moteur embarqué (Audiveris + modèles OCR)
+        run: node desktop/fetch-resources.mjs --arch=${{ matrix.arch }}
+
+      - name: Paquets
+        run: npm run desktop:pack -- ${{ matrix.builder }}
+
+      - name: Test de l'application packagée (vraie analyse)
+        run: npm run desktop:smoke:packaged
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LectONote-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            v1/release/*.zip
+            v1/release/*.exe
+            v1/release/*.dmg
+            v1/release/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Publication
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: paquets
+          merge-multiple: true
+      - name: Version GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la paquets
+          gh release create "${GITHUB_REF_NAME}" paquets/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Lect'O'Note Matic 3000 ${GITHUB_REF_NAME}" \
+            --notes "Application de bureau, sans installation : décompresser puis double-cliquer (Windows : archive portable ou installateur ; Mac : image disque, Apple Silicon ou Intel ; Linux : AppImage). Au premier lancement, Windows et macOS demandent une confirmation (application non signée par un éditeur reconnu), voir le README."

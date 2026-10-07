@@ -2,6 +2,7 @@
 // service du front construit (dist/). Node seul, sans dépendance : il doit tourner tel quel sur un
 // petit VPS ou dans le conteneur Docker.
 // Usage : node server/server.mjs   puis http://localhost:8787
+// L'application de bureau (desktop/main.mjs) l'importe et appelle start() sur un port libre.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,6 +28,11 @@ const MUSIC_FONTS = ['Leland', 'Bravura', 'FinaleJazz', 'Primus', 'MusicalSymbol
 const MUSIC_FONT = MUSIC_FONTS.includes(process.env.MUSIC_FONT) ? process.env.MUSIC_FONT : 'Leland';
 // Bonus accordé aux têtes sans hampe : sans effet si la police est la bonne, nuisible au-delà de 0,5.
 const STEM_LESS_BOOST = process.env.STEM_LESS_BOOST ?? '';
+// Dossier où Audiveris range sa configuration et ses journaux. Par défaut, celui de l'utilisateur
+// (%APPDATA%\AudiverisLtd, ~/.config/AudiverisLtd, ~/Library/…). L'application portable le redirige
+// vers son dossier temporaire pour ne rien laisser sur la machine : Audiveris le déduit de APPDATA
+// (Windows), des XDG_*_HOME (Linux) ou de HOME (Mac), qu'on ne change que pour lui.
+const AUDIVERIS_HOME = process.env.AUDIVERIS_HOME || '';
 const MAX_UPLOAD = 30 * 1024 * 1024;
 const OMR_TIMEOUT = 5 * 60 * 1000;
 const JOB_TTL = 2 * 60 * 60 * 1000;
@@ -39,12 +45,29 @@ const AUDIVERIS = [
   '/opt/audiveris/bin/audiveris',
 ].find(p => p && fs.existsSync(p));
 
-fs.mkdirSync(JOBS_DIR, { recursive: true });
+/** Environnement d'Audiveris : modèles OCR, et dossiers personnels redirigés si demandé. */
+function audiverisEnv() {
+  const env = { ...process.env, TESSDATA_PREFIX: TESSDATA };
+  if (AUDIVERIS_HOME) {
+    for (const d of ['config', 'data', 'cache']) fs.mkdirSync(path.join(AUDIVERIS_HOME, d), { recursive: true });
+    Object.assign(env, {
+      APPDATA: AUDIVERIS_HOME, HOME: AUDIVERIS_HOME,
+      XDG_CONFIG_HOME: path.join(AUDIVERIS_HOME, 'config'),
+      XDG_DATA_HOME: path.join(AUDIVERIS_HOME, 'data'),
+      XDG_CACHE_HOME: path.join(AUDIVERIS_HOME, 'cache'),
+      // sans quoi la JVM laisse un dossier hsperfdata_<utilisateur> dans le dossier temporaire du système
+      JAVA_TOOL_OPTIONS: [process.env.JAVA_TOOL_OPTIONS, '-XX:-UsePerfData'].filter(Boolean).join(' '),
+    });
+  }
+  return env;
+}
 
 // ---------- Jobs ----------
 const jobs = new Map();
 const queue = [];
 let busy = false;
+/** analyse Audiveris en cours (pour l'arrêter si l'application se ferme) */
+let current = null;
 
 function createJob(name, data, font) {
   const id = crypto.randomBytes(6).toString('hex');
@@ -78,7 +101,8 @@ function runJob(job) {
                   '-constant', 'org.audiveris.omr.sheet.ProcessingSwitches.indentations=false'];
     if (STEM_LESS_BOOST) args.push('-constant', `org.audiveris.omr.sheet.note.NoteHeadsBuilder.stemLessBoost=${STEM_LESS_BOOST}`);
     args.push('--', job.input);
-    const child = spawn(AUDIVERIS, args, { env: { ...process.env, TESSDATA_PREFIX: TESSDATA }, windowsHide: true });
+    const child = spawn(AUDIVERIS, args, { env: audiverisEnv(), windowsHide: true });
+    current = child;
     const onData = buf => {
       for (const line of buf.toString('utf8').split(/\r?\n/)) {
         if (!line.trim()) continue;
@@ -105,6 +129,7 @@ function runJob(job) {
     child.on('error', err => { job.log.push('[serveur] ' + err.message); });
     child.on('close', code => {
       clearTimeout(timer);
+      if (current === child) current = null;
       job.exitCode = code;
       job.finishedAt = Date.now();
       try {
@@ -156,8 +181,6 @@ function cleanup() {
   }
   for (const d of fs.readdirSync(JOBS_DIR)) if (!jobs.has(d)) fs.rmSync(path.join(JOBS_DIR, d), { recursive: true, force: true });
 }
-cleanup();
-setInterval(cleanup, 10 * 60 * 1000).unref();
 
 // ---------- HTTP ----------
 const MIME = {
@@ -244,10 +267,40 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Music Reader v1 : http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
-  console.log(AUDIVERIS ? `Audiveris : ${AUDIVERIS}` : 'ATTENTION : Audiveris introuvable (lancer setup.ps1 ou définir AUDIVERIS_CMD).');
-  console.log(`OCR (tessdata) : ${TESSDATA}`);
-  console.log(`Police des têtes par défaut : ${MUSIC_FONT} (familles : ${MUSIC_FONTS.join(', ')})`);
-  if (STEM_LESS_BOOST) console.log(`Bonus têtes sans hampe : ${STEM_LESS_BOOST}`);
-});
+/**
+ * Démarre le serveur. `port` 0 = un port libre choisi par le système (application de bureau).
+ * Renvoie le port effectif et de quoi tout arrêter (analyse en cours comprise).
+ */
+export function start({ port = PORT, host = HOST } = {}) {
+  fs.mkdirSync(JOBS_DIR, { recursive: true });
+  cleanup();
+  const timer = setInterval(cleanup, 10 * 60 * 1000);
+  timer.unref();
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      const actual = server.address().port;
+      console.log(`Music Reader v1 : http://${host === '0.0.0.0' ? 'localhost' : host}:${actual}`);
+      console.log(AUDIVERIS ? `Audiveris : ${AUDIVERIS}` : 'ATTENTION : Audiveris introuvable (lancer setup.ps1 ou définir AUDIVERIS_CMD).');
+      console.log(`OCR (tessdata) : ${TESSDATA}`);
+      console.log(`Police des têtes par défaut : ${MUSIC_FONT} (familles : ${MUSIC_FONTS.join(', ')})`);
+      if (STEM_LESS_BOOST) console.log(`Bonus têtes sans hampe : ${STEM_LESS_BOOST}`);
+      resolve({
+        port: actual,
+        audiveris: AUDIVERIS || null,
+        close: () => new Promise(done => {
+          clearInterval(timer);
+          queue.length = 0;
+          current?.kill();
+          server.close(() => done());
+          server.closeAllConnections?.();
+        }),
+      });
+    });
+  });
+}
+
+// Lancé directement (node server/server.mjs) : on démarre ; importé (application de bureau) : on attend start().
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  start().catch(err => { console.error(err.message); process.exit(1); });
+}

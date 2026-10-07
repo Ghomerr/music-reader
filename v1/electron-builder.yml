@@ -1,0 +1,80 @@
+# Paquets de l'application de bureau (npm run desktop:pack, après npm run desktop:resources).
+# Chaque système se construit sur lui-même : le moteur Audiveris embarqué (desktop/resources/<plateforme>-<arch>)
+# n'est extrait que là. En intégration continue : .github/workflows/desktop.yml, une machine par cible.
+appId: io.github.ghomerr.lectonote
+productName: "Lect'O'Note Matic 3000"
+copyright: Copyright © 2026 Ghomerr
+directories:
+  output: release
+  buildResources: desktop/build
+
+# Seul le nécessaire entre dans l'application : l'interface construite, le serveur, le processus principal.
+# React, OSMD… sont déjà dans dist/ (Vite) : aucune dépendance npm n'est embarquée.
+files:
+  - dist/**
+  - server/**
+  - desktop/main.mjs
+  - desktop/build/icon.png
+  - package.json
+  - "!**/*.map"
+
+# Moteur de reconnaissance de la plateforme visée : Audiveris (Java compris) et modèles OCR, hors de l'archive asar
+# pour pouvoir être exécuté.
+extraResources:
+  - from: desktop/resources/${platform}-${arch}
+    to: engine
+  - from: ../LICENSE
+    to: LICENSE.txt
+  - from: desktop/THIRD_PARTY.md
+    to: THIRD_PARTY.md
+
+artifactName: LectONote-${version}-${os}-${arch}.${ext}
+
+win:
+  icon: desktop/build/icon.png
+  target:
+    # version portable : une archive à décompresser une fois, puis double-clic sur l'application, sans installation.
+    # (Le format « portable » en un seul .exe a été écarté : il se redécompresse à chaque lancement, et l'antivirus
+    # analyse alors des milliers de fichiers. Mesuré : 50 s avant que l'application ne s'ouvre.)
+    - target: zip
+      arch: x64
+    # installateur classique (raccourcis, désinstallation), pour qui le préfère
+    - target: nsis
+      arch: x64
+  # nom de l'archive portable (l'installateur a le sien, ci-dessous)
+  artifactName: LectONote-${version}-windows-portable.${ext}
+nsis:
+  artifactName: LectONote-${version}-windows-installation.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerLanguages: [fr_FR]
+  language: "1036"
+  shortcutName: "Lect'O'Note Matic 3000"
+
+mac:
+  icon: desktop/build/icon.png
+  category: public.app-category.music
+  target:
+    - target: dmg
+    - target: zip
+  # Pas de compte développeur Apple : signature « ad hoc » (obligatoire sur Apple Silicon, sans quoi macOS
+  # déclare l'application endommagée), sans « hardened runtime » qui l'interdirait avec Java embarqué.
+  # Au premier lancement, macOS demande une confirmation (clic droit › Ouvrir).
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+dmg:
+  artifactName: LectONote-${version}-mac-${arch}.${ext}
+  title: "Lect'O'Note Matic 3000"
+
+linux:
+  icon: desktop/build/icon.png
+  # nom de l'exécutable sans espace ni apostrophe (lanceurs, scripts, test packagé)
+  executableName: lectonote
+  category: Audio
+  synopsis: Lecture de partitions à partir d'images
+  target:
+    # AppImage : un seul fichier exécutable, sans installation
+    - target: AppImage
+      arch: x64
