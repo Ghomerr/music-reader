@@ -68,8 +68,17 @@ function extractAudiveris(pkg, dest) {
     run('msiexec', ['/a', pkg, '/qn', `TARGETDIR=${dest}`]);
     fs.rmSync(path.join(dest, path.basename(pkg)), { force: true });
   } else if (platform === 'darwin') {
-    const mount = fs.mkdtempSync(path.join(os.tmpdir(), 'audiveris-dmg-'));
-    run('hdiutil', ['attach', pkg, '-nobrowse', '-readonly', '-mountpoint', mount]);
+    // L'image disque d'Audiveris porte un contrat de licence (AGPL) : l'ouvrir l'affiche et attend qu'on clique
+    // « Accepter », ce qui échoue sans personne devant (« hdiutil: attach canceled »). Comme Homebrew, on la
+    // convertit d'abord en image brute (sans contrat), et on répond quand même à l'invite si elle apparaît.
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'audiveris-dmg-'));
+    const raw = path.join(work, 'audiveris.cdr');
+    run('hdiutil', ['convert', '-quiet', '-format', 'UDTO', '-o', raw, pkg]);
+    const mount = path.join(work, 'mnt');
+    fs.mkdirSync(mount);
+    execFileSync('hdiutil', ['attach', raw, '-nobrowse', '-readonly', '-noverify', '-mountpoint', mount], {
+      input: 'qn\n', stdio: ['pipe', 'inherit', 'inherit'], env: { ...process.env, PAGER: 'cat' },
+    });
     try {
       const appName = fs.readdirSync(mount).find(f => f.endsWith('.app'));
       if (!appName) throw new Error('aucune application dans l’image disque');
@@ -77,6 +86,7 @@ function extractAudiveris(pkg, dest) {
       run('ditto', [path.join(mount, appName), path.join(dest, 'Audiveris.app')]);
     } finally {
       run('hdiutil', ['detach', mount, '-force']);
+      fs.rmSync(work, { recursive: true, force: true });
     }
   } else {
     run('dpkg-deb', ['-x', pkg, dest]);
