@@ -137,9 +137,10 @@ symboles vus par Audiveris mais absents du résultat) :
 
 ## Application de bureau (Windows, Mac, Linux)
 
-Le logiciel se distribue aussi comme une application à télécharger, **sans installation** : l'interface s'ouvre
-dans sa propre fenêtre, et le serveur comme Audiveris (Java compris) et les modèles OCR sont embarqués. Aucune
-connexion n'est nécessaire, et la mémoire de l'ordinateur suffit largement (une page : moins de 500 Mo).
+C'est la forme sous laquelle le logiciel se distribue : une application à télécharger, **sans installation**
+(version 1.1.0 sur la page [Releases](https://github.com/Ghomerr/music-reader/releases)). L'interface s'ouvre dans
+sa propre fenêtre, et le serveur comme Audiveris (Java compris) et les modèles OCR sont embarqués. Aucune connexion
+n'est nécessaire, et la mémoire de l'ordinateur suffit largement (une page : moins de 500 Mo).
 
 | Système | Fichier | Utilisation |
 |---|---|---|
@@ -154,6 +155,14 @@ les journaux d'Audiveris vont dans un dossier temporaire propre à chaque lancem
 lancement suivant si l'application a été interrompue). Restent seulement les fichiers exportés par l'utilisateur
 (projet, audio, MusicXML), là où il les range. Audiveris choisit ses dossiers d'après `APPDATA` (Windows),
 `XDG_*_HOME` (Linux) ou `HOME` (Mac) : le serveur ne les redirige que pour lui (`AUDIVERIS_HOME`).
+
+**Statistiques d'usage** (depuis la 1.1.0) : l'application packagée envoie à PostHog (hébergement UE) quelques
+événements anonymes, relayés par le serveur embarqué (`POST /api/stats`, `src/stats.ts`) : `app_lancee` (version,
+système, fuseau horaire), `partition_analysee` (pages, échecs, durée, mesures, police), `projet_charge` et
+`projet_exporte` (format : json, wav, musicxml, impression). Un identifiant tiré au hasard à chaque lancement, pas
+de géolocalisation, ni nom de fichier ni contenu de partition ; envoi sans attente, sans effet hors connexion.
+Rien n'est envoyé en développement, pendant les tests ni par la version web, sauf si `POSTHOG_KEY` est défini.
+`LECTONOTE_NO_STATS=1` les coupe dans l'application.
 
 **Premier lancement** : l'application n'est pas signée par un éditeur reconnu (certificats payants).
 - Windows : « Windows a protégé votre ordinateur » › *Informations complémentaires* › *Exécuter quand même*.
@@ -172,8 +181,22 @@ npm run desktop                 # (développement) lance l'application sans la p
 
 En intégration continue ([.github/workflows/desktop.yml](../.github/workflows/desktop.yml)), une machine par cible
 (Windows, Mac Apple Silicon, Mac Intel, Linux) prépare le moteur, construit, puis **teste une vraie analyse depuis
-l'application packagée** ; sur Mac, la signature est vérifiée aussi. Un tag `v…` publie une version GitHub avec
-tous les téléchargements.
+l'application packagée** ; sur Mac, la signature est vérifiée aussi. Chaque push sur `main` touchant `v1/` construit
+et teste (paquets dans les *artifacts* du run) ; un tag `v…` publie en plus une version GitHub avec tous les
+téléchargements. Les quatre cibles passent depuis la 1.0.0.
+
+**Publier une version** : mettre à jour `version` dans `package.json`, commiter, puis poser et pousser le tag
+(`git tag -a v1.1.0 -m "…"` puis `git push origin main v1.1.0`). Ne pas créer la version à la main sur GitHub :
+la publication la crée elle-même et échouerait si elle existait déjà.
+
+Particularités rencontrées par système :
+- **Mac** : l'image disque d'Audiveris porte un contrat de licence à accepter, qui bloque sans personne devant ;
+  elle est d'abord convertie en image brute (comme le fait Homebrew). Sans compte développeur Apple, l'application
+  est signée « ad hoc », sans quoi macOS la dirait endommagée sur Apple Silicon.
+- **Linux** : le paquet Audiveris d'Ubuntu 22.04 est pris pour sa compatibilité avec davantage de distributions ; il
+  est décompressé, pas installé (son script d'installation n'intègre qu'au bureau et échoue sans bureau).
+- **Windows** : le MSI « console » d'Audiveris, extrait par installation administrative : son journal sort sur la
+  sortie standard, que le serveur lit.
 
 Mesures sous Windows : fenêtre ouverte en 1,3 s, page de test analysée en 10 s ; archive portable de 240 Mo
 (344 fichiers, décompressée en 11 s), installateur de 184 Mo. Les paquets d'Audiveris contiennent une copie
@@ -181,9 +204,10 @@ inutilisée de ses classes Java (2 471 fichiers) : elle est retirée, après vé
 identiques à l'octet près. Le format « portable en un seul .exe » a été écarté : il se redécompresse à chaque
 lancement, et l'antivirus analyse alors tout — 50 s avant l'ouverture.
 
-## Installation du serveur (Windows)
+## Version web : serveur à lancer soi-même (Windows)
 
-Prérequis : **Node.js 20+**. Audiveris embarque son propre Java.
+Pour le développement, ou pour l'héberger sur une machine d'au moins 1 Go de mémoire. Prérequis : **Node.js 20+**
+(22+ pour l'application de bureau). Audiveris embarque son propre Java.
 
 ```powershell
 cd v1
@@ -200,15 +224,16 @@ Variables d'environnement : celles de la v0 (`PORT`, `HOST`, `AUDIVERIS_CMD`, `T
 `MUSIC_FONT`, `STEM_LESS_BOOST`), plus `JOBS_DIR` et `DIST_DIR`.
 
 **Docker** : `docker build -t music-reader .` (depuis `v1/`) puis `docker run --rm -p 8787:8787 music-reader`. Le
-`Dockerfile` (Ubuntu 24.04, paquet officiel d'Audiveris 5.11, modèles OCR standard eng/fra/ita) **n'a pas encore été
-testé** : Docker n'était pas disponible sur le poste de développement. Prévoir 1 à 2 Go de mémoire. Le lanceur
-d'Audiveris réserve 512 Mo d'office : le Dockerfile le ramène à 64 Mo et plafonne la mémoire de Java par
-`--build-arg AUDIVERIS_HEAP=…` (1 Go par défaut).
+`Dockerfile` (Ubuntu 24.04, paquet officiel d'Audiveris 5.11 décompressé, modèles OCR standard eng/fra/ita) se
+construit et démarre sur Render ; il n'a pas été essayé ailleurs (Docker absent du poste de développement).
+Mémoire : moins de 500 Mo par analyse une fois Java plafonné, plus ~60 Mo pour le serveur ; compter 1 Go. Le
+lanceur d'Audiveris réserve 512 Mo d'office : le Dockerfile le ramène à 64 Mo et plafonne la mémoire de Java par
+`--build-arg AUDIVERIS_HEAP=…` (1 Go par défaut ; 400m suffisent, mesuré).
 
 **Render** : le [`render.yaml`](../render.yaml) à la racine du dépôt indique où trouver le Dockerfile (`./v1/Dockerfile`,
-contexte `./v1`). Pour un service créé à la main, régler la même chose dans *Settings › Build & Deploy*. L'offre
-gratuite (512 Mo) affiche l'application, mais une analyse risque d'y manquer de mémoire : `AUDIVERIS_HEAP=320m` y
-est le maximum raisonnable, et l'offre à 2 Go est celle qui convient à Audiveris.
+contexte `./v1`). Pour un service créé à la main : Root Directory `v1`, Dockerfile Path `./Dockerfile`, contexte `.`.
+**L'offre gratuite (512 Mo) ne convient pas** : l'application s'affiche, mais l'analyse y manque de mémoire. Il faut
+une offre d'au moins 1 Go — d'où le choix de l'application de bureau pour distribuer le logiciel.
 
 ## Organisation du code
 
@@ -243,3 +268,6 @@ rapport au début de sa mesure : une note fausse ne décale jamais le reste de l
   simulé) et un essai de lecture dans Edge, pas à l'oreille sur plusieurs navigateurs.
 - Le service worker ne vide son cache que si l'on change `VERSION` dans `public/sw.js`.
 - Un projet rechargé n'a pas ses images : ajouter des pages repart d'un nouveau projet.
+- Application de bureau : non signée par un éditeur reconnu (confirmation au premier lancement) ; pas de mise à
+  jour automatique ; testée à la main sous Windows, sur Mac et Linux seulement par l'intégration continue (le
+  premier lancement sur un vrai Mac reste à essayer) ; pas de version Linux pour processeur ARM.

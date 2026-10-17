@@ -18,7 +18,7 @@ Application qui lit une partition à partir d'images, en extrait les notes et le
 | Visualisation | Uniquement la partition **reconstruite** à partir de l'analyse (pas d'affichage de l'image d'origine à l'étape d'écoute). |
 | Sauvegarde | Pas de base de données. **Fichier projet JSON** exporté puis rechargeable à la place d'une partition. |
 | Export audio | **WAV** (généré dans le navigateur). |
-| Plateforme | Serveur web hébergé + **PWA** compatible mobile (installable, lecture hors ligne). |
+| Plateforme | **Application de bureau** à télécharger, sans installation, pour Windows, Mac (Apple Silicon et Intel) et Linux : interface, serveur et Audiveris embarqués, aucune connexion nécessaire. La version web (serveur + PWA) reste utilisable en auto-hébergement, mais aucun hébergement gratuit ne fournit la mémoire nécessaire (§6). |
 
 ## 2. Parcours utilisateur
 
@@ -42,7 +42,12 @@ Application qui lit une partition à partir d'images, en extrait les notes et le
 ## 3. Architecture
 
 ```
-PWA (React + TypeScript + Vite)
+Application de bureau (Electron) — ou navigateur + serveur hébergé
+  ├─ Fenêtre : l'interface ci-dessous, servie par le serveur embarqué sur un port local
+  ├─ Ressources : Audiveris 5.11 (Java compris) + modèles OCR, propres à chaque système
+  └─ Portable : tout ce qu'écrit une session va dans un dossier temporaire, effacé à la fermeture
+
+Interface (React + TypeScript + Vite)
   ├─ Import multi-pages, réordonnancement
   ├─ Analyse : choix automatique de la police sur la page 1, puis pages une à une
   ├─ Conversion MusicXML → modèle interne, assemblage des pages, contrôle des durées
@@ -50,13 +55,13 @@ PWA (React + TypeScript + Vite)
   ├─ Affichage : modèle → MusicXML → OpenSheetMusicDisplay (écran et impression)
   ├─ Lecture : synthèse maison (Web Audio), sans échantillons
   ├─ Export JSON / import JSON, export WAV (OfflineAudioContext)
-  └─ Service worker : app utilisable hors ligne (hors analyse)
+  └─ Service worker : app utilisable hors ligne (version web seulement)
           │  POST d'une page (image brute)
           ▼
-Serveur Node.js (Docker, sans état, sans BDD, sans dépendance npm)
+Serveur Node.js (embarqué, ou Docker ; sans état, sans BDD, sans dépendance npm)
   ├─ Audiveris (OMR) → MusicXML, une page à la fois
   ├─ Lecture du journal (notes vues puis jetées) et de la géométrie de la page (.omr)
-  └─ Suppression des fichiers temporaires après 2 h
+  └─ Suppression des fichiers temporaires après 2 h (à la fermeture pour l'application de bureau)
 ```
 
 ### Briques et difficulté
@@ -69,12 +74,13 @@ Serveur Node.js (Docker, sans état, sans BDD, sans dépendance npm)
 | Séparation des lignes | 🟢 Faible | Native dans MusicXML (parties / portées). |
 | Transposition | 🟢 Faible | Décalage MIDI en demi-tons à la lecture. |
 | Tempo | 🟢 Faible | Curseur partant de 100 BPM. Aucune lecture sur la partition. |
-| Synthèse / lecture | 🟢 Faible | Tone.js + échantillons. |
+| Synthèse / lecture | 🟢 Faible | Synthèse maison (Web Audio), sans échantillons. |
 | Export JSON / WAV | 🟢 Faible | Entièrement côté navigateur. |
 | PWA hors ligne | 🟢 Faible | Manifest + service worker. |
+| Distribution | 🟠 Moyenne | Application Electron par système, Audiveris embarqué ; construite et testée en intégration continue, une machine par cible. |
 
-### Contraintes d'hébergement
-- Audiveris (Java) : prévoir **1–2 Go de RAM**. Petit VPS, Fly.io ou Render conviennent.
+### Contraintes d'exécution
+- Audiveris (Java) : **moins de 500 Mo** par page une fois la mémoire de Java plafonnée (mesuré : 484 Mo à 400 Mo de tas, 713 Mo avec les réglages d'origine de son lanceur), plus ~60 Mo pour le serveur. Une machine d'1 Go suffit ; l'offre gratuite de Render (512 Mo) non.
 - Analyse : ~10–30 s par page → traitement asynchrone (job + interrogation périodique du statut) et progression par page.
 - Une image = une page : pas de découpage à faire côté serveur.
 - Serveur volatile : aucune donnée conservée ; tout ce qui doit durer passe par le fichier projet.
@@ -142,6 +148,9 @@ Contient la musique analysée, les corrections et les réglages, sans les images
 | 3 | Front PWA | Import, analyse, affichage, lecture, réglages. | 4–5 j |
 | 4 | Sauvegarde | Export/import JSON, export WAV, partage mobile. | 1–2 j |
 | 5 | Finitions | PWA hors ligne, déploiement, gestion des erreurs. | 1–2 j |
+| 6 | Application de bureau | Electron sans installation, Audiveris embarqué, Windows / Mac / Linux, intégration continue, publication. | ~2 j |
+
+Toutes ces étapes sont faites : la **version 1.0.0** est publiée, suivie de la **1.1.0** (voir ci-dessous).
 
 ### État d'avancement
 
@@ -170,9 +179,22 @@ Contient la musique analysée, les corrections et les réglages, sans les images
 - **Décision** : **police choisie automatiquement sur la première page**, à partir d'un extrait d'au moins 2 systèmes et 4 mesures analysé avec cinq polices (détail et chiffres dans [v1/README.md](v1/README.md#choix-automatique-de-la-police)). Un extrait d'un seul système trompe : Audiveris y calcule ses statistiques sur trop peu de matière. Avec deux systèmes, l'extrait désigne la même police que la page entière sur 6 pages sur 7, pour 42 % de temps en moins. La police retenue est proposée pour les autres pages, à valider.
 - **Une page sortait parfois en deux partitions** : Audiveris prend un système en retrait pour le début d'un nouveau mouvement (Fortunio p1, dont seule l'introduction était lue). La détection est désactivée côté serveur.
 - **Décision** : synthèse maison plutôt que Tone.js et des échantillons : rien à télécharger, fonctionne hors ligne, et le même moteur sert à l'export WAV.
-- **À vérifier au déploiement** : le `Dockerfile` n'a pas pu être testé (Docker absent du poste) ; le son n'a été contrôlé que par des tests et une lecture dans Edge, pas à l'oreille sur plusieurs navigateurs et mobiles.
-- **Hébergement gratuit écarté.** Mesuré : une page analysée demande 480 à 510 Mo avec la mémoire de Java plafonnée (713 Mo avec les réglages d'origine du lanceur d'Audiveris), plus ~60 Mo pour le serveur. L'offre gratuite de Render (512 Mo) ne suffit pas ; Hugging Face exige désormais un abonnement pour les applications Docker, Fly.io n'a plus d'offre gratuite. Restaient Google Cloud Run et une petite VM Oracle (carte bancaire, administration).
-- **Décision : application de bureau Electron**, sans installation, pour Windows, Mac (Apple Silicon et Intel) et Linux, avec Audiveris et les modèles OCR embarqués (détails dans [v1/README.md](v1/README.md#application-de-bureau-windows-mac-linux)). Rien n'est écrit sur la machine hors d'un dossier temporaire effacé à la fermeture. Construite et testée par une vraie analyse sur chaque système en intégration continue (GitHub Actions) ; publiée sur la page Releases du dépôt. Vérifiée à la main sous Windows (archive portable, installateur, interface) ; le Mac et Linux ne le sont que par l'intégration continue.
+- **Relecture à l'usage : l'éditeur de mesure s'est enrichi** à partir des premiers essais réels, tous dans [v1/README.md](v1/README.md#corriger-une-mesure) :
+  - **voix superposées** — Audiveris met parfois la seconde voix d'une portée *à la suite* de la première au lieu de la superposer, et la mesure déborde d'un temps (Over The Rainbow, mesures 3, 11 et 16 du piano). On déplace un accord dans le temps et on le change de voix ; une note posée à l'intérieur d'une autre passe d'elle-même dans une voix libre ; les autres voix de la portée sont grisées. La mesure 3 a été corrigée ainsi de bout en bout ;
+  - **trois modes exclusifs** (Sélectionner / Ajouter / Gommer) : un même clic sélectionnait ou posait une note selon qu'il tombait ou non sur une tête, ce qui posait des notes par erreur ;
+  - **« Ramener à 4/4 »** coupe ce qui dépasse la barre de mesure ;
+  - **tous les couplets de paroles visibles ensemble**, et suppression d'un couplet dans toute la partition (pour ne garder qu'une langue) ;
+  - côté analyse et écoute : une ligne décochée disparaît de la partition et de la liste à relire, et n'allonge plus les mesures ; les zones lues de l'étape d'analyse se replient.
+- **Décision** : le logiciel s'appelle **Lect'O'Note Matic 3000** (nom affiché, README, plan) ; `music-reader` reste son nom de code (dépôt, format des fichiers projet, qui se rouvrent donc toujours).
+- **Hébergement gratuit écarté.** Le déploiement sur Render a d'abord demandé plusieurs correctifs (Dockerfile dans `v1/`, paquet Audiveris décompressé plutôt qu'installé, mémoire de Java réglable) ; l'image s'y construit et démarre, mais l'analyse manque de mémoire. Mesuré ensuite : 480 à 510 Mo par page avec la mémoire de Java plafonnée (713 Mo avec les réglages d'origine du lanceur d'Audiveris), plus ~60 Mo pour le serveur — l'offre gratuite de Render (512 Mo) ne peut pas suffire. Hugging Face exige désormais un abonnement pour les applications Docker, Fly.io n'a plus d'offre gratuite ; restaient Google Cloud Run et une petite VM Oracle, au prix d'une carte bancaire et d'un serveur à administrer.
+- **Décision : application de bureau Electron**, sans installation, pour Windows, Mac (Apple Silicon et Intel) et Linux, avec Audiveris et les modèles OCR embarqués (détails dans [v1/README.md](v1/README.md#application-de-bureau-windows-mac-linux)) :
+  - **rien n'est écrit sur la machine** : profil du navigateur intégré, pages analysées, configuration et journaux d'Audiveris vont dans un dossier temporaire propre au lancement, effacé à la fermeture. Vérifié sous Windows : rien ne reste, ni dans le dossier temporaire, ni dans `%APPDATA%`, ni à côté de l'application ;
+  - **Windows** : archive portable (décompresser une fois, puis double-clic) et installateur au choix. Le `.exe` portable en un seul fichier a été écarté : il se redécompresse à chaque lancement et l'antivirus retarde l'ouverture de 50 s, contre 1,3 s pour l'archive ;
+  - **Mac** : une image disque par architecture, signée « ad hoc » (sans compte développeur Apple) ;
+  - les paquets d'Audiveris contiennent une copie inutilisée de ses classes Java (2 471 fichiers) : retirée, après vérification que les résultats restent identiques à l'octet près.
+- **Version 1.0.0 publiée** sur la page [Releases](https://github.com/Ghomerr/music-reader/releases) (7 octobre 2026). L'intégration continue ([desktop.yml](.github/workflows/desktop.yml)) construit chaque cible sur son propre système et **teste une vraie analyse depuis l'application packagée** ; les quatre cibles passent. Le Mac a d'abord échoué : l'image disque d'Audiveris affiche un contrat de licence à accepter, qui bloquait sans personne devant ; elle est convertie au préalable, comme le fait Homebrew.
+- **Version 1.1.0 publiée** (17 octobre 2026) : statistiques d'usage anonymes (lancements, analyses, projets chargés et exportés) pour savoir si et comment le logiciel est utilisé, détail dans [v1/README.md](v1/README.md#application-de-bureau-windows-mac-linux). Un test de durée (« rapide sur une grande partition ») a dû être assoupli : la machine Mac Intel de l'intégration continue dépassait les 200 ms prévus.
+- **Reste à vérifier à la main** : le premier lancement sur un vrai Mac (avertissement de macOS pour une application non signée par un éditeur reconnu) et sous Linux ; le son, contrôlé par des tests et une lecture dans Edge, pas à l'oreille sur plusieurs systèmes.
 
 ## 7. Hors V1 (pistes V2)
 
@@ -183,6 +205,9 @@ Contient la musique analysée, les corrections et les réglages, sans les images
 - Recadrage/redressement des photos.
 - Corriger une barre de mesure manquée ou en trop (aujourd'hui : relancer la page avec une autre police).
 - Corriger Audiveris lui-même, si les erreurs se révèlent trop fréquentes — voir « Fiabiliser la reconnaissance ».
+- Signer l'application (certificat Windows, compte développeur Apple à 99 $/an) pour supprimer l'avertissement du premier lancement.
+- Mise à jour automatique de l'application de bureau (aujourd'hui : retélécharger la nouvelle version).
+- Linux sur processeur ARM : Audiveris n'y est pas distribué, il faudrait le compiler.
 
 **Avancé en V1** (voir [v1/README.md](v1/README.md)) : la correction manuelle des notes et des paroles, la
 réimpression de la partition et la fiabilisation sans toucher à Audiveris. Les sections ci-dessous restent la
@@ -251,5 +276,8 @@ La correction manuelle reste nécessaire quoi qu'il arrive : aucune de ces piste
 | Image contenant deux pages | Avertissement à l'import quand l'image est plus large que haute. |
 | Note jetée par Audiveris sans trace dans le résultat | Lecture du journal d'Audiveris en plus du contrôle des durées (§7, « Fiabiliser la reconnaissance »). |
 | Lignes incohérentes entre pages | Raccord par position + avertissement à l'utilisateur. |
-| Temps d'analyse / mémoire serveur | Jobs asynchrones, une analyse à la fois, dimensionnement 2 Go. |
+| Temps d'analyse / mémoire | Jobs asynchrones, une analyse à la fois ; application de bureau : l'analyse tourne sur la machine de l'utilisateur, qui a largement la mémoire nécessaire. |
 | Téléchargement de fichiers sur iOS en PWA | Web Share API en priorité. |
+| Application refusée au premier lancement (non signée) | Signature « ad hoc » sur Mac (évite « application endommagée ») ; marche à suivre dans le README ; signature payante en piste V2. |
+| Redistribution d'Audiveris (AGPL-3.0) | Embarqué sans modification et exécuté comme programme séparé ; licence et lien vers son code source joints à l'application (`THIRD_PARTY.md`). |
+| Paquet Audiveris qui change d'une version à l'autre | Version figée (5.11.0) ; chaque construction est vérifiée par une vraie analyse sur chaque système. |
