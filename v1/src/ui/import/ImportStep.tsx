@@ -4,6 +4,7 @@ import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { parseProject } from '../../model/project-io';
 import { resetHistory, setProject, setState, useStore, type PageState } from '../../state/store';
 import { addFiles, analysePending, clearPages, FONT_LABELS, isBusy, isSpread, movePage, removePage } from '../../analysis/run';
+import { track } from '../../stats';
 import './ImportStep.css';
 
 const SPREAD_HINT = "Audiveris attend une page de partition par image. Un scan de deux pages en vis-à-vis produit des "
@@ -67,6 +68,7 @@ export function ImportStep() {
         step: 'score', selection: null,
       });
       setProjectError('');
+      track('projet_charge', { pages: project.pages.length, mesures: project.measures.length });
     } catch (err) {
       setProjectError(`${f.name} : ${err instanceof Error ? err.message : String(err)}`);
     }

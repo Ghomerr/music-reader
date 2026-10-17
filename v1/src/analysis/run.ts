@@ -11,6 +11,7 @@ import { analyseImage, fetchLayout, fetchMusicXml } from './api';
 import { cropImage, imageSize, scaleImage } from './image';
 import { sampleRegion } from './sample';
 import { fontScore, pickFont, trialMetrics, type TrialMetrics } from './score';
+import { track } from '../stats';
 
 /** Polices essayées automatiquement, la police par défaut en tête (elle gagne les égalités). */
 export const TRIAL_FONTS = ['Leland', 'Bravura', 'FinaleJazz', 'Primus', 'MusicalSymbols'];
@@ -250,6 +251,8 @@ export async function analysePending(): Promise<void> {
     const s = getState();
     let todo = s.pages.filter(p => p.file && (p.status === 'pending' || p.status === 'error'));
     if (!todo.length) return;
+    const keys = new Set(todo.map(p => p.key));
+    const t0 = Date.now();
     let font = s.font;
     let proposed = s.autoFont && !s.calibration.validated && s.calibration.status !== 'idle';
     let rerun: Promise<unknown> | undefined;
@@ -262,6 +265,17 @@ export async function analysePending(): Promise<void> {
     }
     const scaleMode = getState().scaleMode;
     await Promise.all([rerun, ...todo.map(p => runPage(p.key, font, scaleMode, proposed))]);
+    const end = getState();
+    const done = end.pages.filter(p => keys.has(p.key));
+    track('partition_analysee', {
+      pages: done.length,
+      pages_ok: done.filter(p => p.status === 'done').length,
+      pages_echec: done.filter(p => p.status === 'error').length,
+      duree_s: Math.round((Date.now() - t0) / 1000),
+      mesures: end.project?.measures.length ?? 0,
+      police: font,
+      police_auto: s.autoFont,
+    });
   } finally {
     analysing = false;
   }

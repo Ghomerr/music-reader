@@ -16,6 +16,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const TITLE = "Lect'O'Note Matic 3000";
 const APP_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Statistiques d'usage anonymes (lancements, analyses, projets ouverts / exportés), envoyées à PostHog (UE) :
+// seulement par l'application packagée, jamais en développement ni pendant le test. LECTONOTE_NO_STATS=1 les coupe.
+// Clé publique du projet PostHog (la même est visible dans le code de la page https://ghomerr.github.io/home/).
+const STATS_KEY = 'phc_CSjdhXvkwezgmnua3YRb6gRfnyetNJqHXBcsEkPw5Fgq';
 
 // ---------- Dossier temporaire de la session ----------
 
@@ -94,6 +98,7 @@ async function startServer() {
     AUDIVERIS_HOME: path.join(TEMP, 'audiveris'),
     TESSDATA_PREFIX: tessdata,
     ...(fs.existsSync(cmd) ? { AUDIVERIS_CMD: cmd } : {}),
+    ...(app.isPackaged && !smoke && !process.env.LECTONOTE_NO_STATS && !process.env.POSTHOG_KEY ? { POSTHOG_KEY: STATS_KEY } : {}),
   });
   const { start } = await import(pathToFileURL(path.join(APP_ROOT, 'server', 'server.mjs')).href);
   return start({ port: 0, host: '127.0.0.1' });
@@ -185,6 +190,7 @@ app.whenReady().then(async () => {
   }
   setMenu();
   createWindow(`http://127.0.0.1:${server.port}`);
+  server.track('app_lancee');
 });
 
 // Une seule fenêtre : la fermer quitte l'application, Mac compris (sinon le serveur tournerait pour rien).

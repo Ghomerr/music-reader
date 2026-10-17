@@ -11,6 +11,7 @@ import { writeMusicXml, type WriteOptions } from '../../model/musicxml-write';
 import { keyLabel, transposeKey } from '../../model/pitch';
 import type { Project, Settings } from '../../model/types';
 import { setState, updateSettings, useStore } from '../../state/store';
+import { track } from '../../stats';
 import './PrintStep.css';
 
 /** Taille de la musique sur la feuille : portée d'environ 7,5 mm, comme une partition imprimée courante. */
@@ -148,6 +149,11 @@ function PrintView({ project }: { project: Project }) {
   const exportXml = () => {
     const xml = writeMusicXml(project, options);
     download(fileName(title || project.title), xml, 'application/vnd.recordare.musicxml+xml');
+    track('projet_exporte', { format: 'musicxml' });
+  };
+  const printScore = () => {
+    track('projet_exporte', { format: 'impression' });
+    window.print();
   };
 
   const toggleLine = (id: string) => {
@@ -239,7 +245,7 @@ function PrintView({ project }: { project: Project }) {
         </fieldset>
 
         <div className="print-actions">
-          <button className="btn primary" onClick={() => window.print()} disabled={!ready}>🖨 Imprimer / PDF</button>
+          <button className="btn primary" onClick={printScore} disabled={!ready}>🖨 Imprimer / PDF</button>
           <button className="btn" onClick={exportXml}>Exporter le MusicXML</button>
         </div>
         <small>Pour obtenir un PDF, choisissez « Enregistrer au format PDF » comme imprimante dans la boîte d'impression.</small>

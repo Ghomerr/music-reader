@@ -34,6 +34,10 @@ const STEM_LESS_BOOST = process.env.STEM_LESS_BOOST ?? '';
 // (Windows), des XDG_*_HOME (Linux) ou de HOME (Mac), qu'on ne change que pour lui.
 const AUDIVERIS_HOME = process.env.AUDIVERIS_HOME || '';
 const MAX_UPLOAD = 30 * 1024 * 1024;
+// Statistiques d'usage anonymes (PostHog, UE) : actives seulement si POSTHOG_KEY est défini, ce que fait
+// l'application de bureau une fois packagée. Rien en développement, en test ni en auto-hébergement par défaut.
+const STATS_KEY = process.env.POSTHOG_KEY || '';
+const STATS_HOST = process.env.POSTHOG_HOST || 'https://eu.i.posthog.com';
 const OMR_TIMEOUT = 5 * 60 * 1000;
 const JOB_TTL = 2 * 60 * 60 * 1000;
 
@@ -182,6 +186,45 @@ function cleanup() {
   for (const d of fs.readdirSync(JOBS_DIR)) if (!jobs.has(d)) fs.rmSync(path.join(JOBS_DIR, d), { recursive: true, force: true });
 }
 
+// ---------- Statistiques d'usage ----------
+// Un identifiant tiré au hasard à chaque démarrage (rien n'est gardé d'une session à l'autre), pas de GeoIP :
+// le fuseau horaire suffit à situer grossièrement. Jamais de nom de fichier ni de contenu de partition.
+const STATS_EVENTS = new Set(['app_lancee', 'partition_analysee', 'projet_charge', 'projet_exporte']);
+const STATS_SESSION = crypto.randomUUID();
+const STATS_BASE = {
+  $process_person_profile: false,
+  $geoip_disable: true,
+  app: 'lectonote',
+  version: (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return null; } })(),
+  os: process.platform,
+  arch: process.arch,
+  fuseau: Intl.DateTimeFormat().resolvedOptions().timeZone,
+};
+
+/** Envoie un événement (sans attendre ni jamais échouer : une panne de réseau ne doit rien gêner). */
+export function track(event, properties = {}) {
+  if (!STATS_KEY || !STATS_EVENTS.has(event)) return;
+  fetch(STATS_HOST + '/i/v0/e/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: STATS_KEY, event, distinct_id: 'lectonote-' + STATS_SESSION, timestamp: new Date().toISOString(),
+      properties: { ...properties, ...STATS_BASE },
+    }),
+  }).catch(() => { /* hors ligne : tant pis */ });
+}
+
+/** Propriétés envoyées par l'interface : quelques valeurs simples, rien d'autre. */
+function statsProps(raw) {
+  const props = {};
+  if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw).slice(0, 12)) {
+      if (/^[a-z_]{1,30}$/.test(k) && (typeof v === 'number' || typeof v === 'boolean' || (typeof v === 'string' && v.length <= 40))) props[k] = v;
+    }
+  }
+  return props;
+}
+
 // ---------- HTTP ----------
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -237,6 +280,14 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { audiveris: AUDIVERIS || null, ocrLanguages: langs, queue: queue.length, busy,
                               musicFonts: MUSIC_FONTS, musicFont: MUSIC_FONT });
     }
+    if (url.pathname === '/api/stats' && req.method === 'POST') {
+      try {
+        const { event, properties } = JSON.parse((await readBody(req)).toString('utf8'));
+        track(event, statsProps(properties));
+      } catch { /* corps illisible : ignoré */ }
+      res.writeHead(204).end();
+      return;
+    }
     if (url.pathname === '/api/jobs' && req.method === 'POST') {
       if (!AUDIVERIS) return send(res, 503, { error: 'Audiveris introuvable : lancer setup.ps1 ou définir AUDIVERIS_CMD.' });
       const data = await readBody(req);
@@ -288,7 +339,8 @@ export function start({ port = PORT, host = HOST } = {}) {
       resolve({
         port: actual,
         audiveris: AUDIVERIS || null,
-        close: () => new Promise(done => {
+        track,
+        close:() => new Promise(done => {
           clearInterval(timer);
           queue.length = 0;
           current?.kill();

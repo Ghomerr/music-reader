@@ -11,6 +11,7 @@ import * as player from '../../audio/player';
 import { DEFAULT_TEMPO, MAX_TEMPO, MIN_TEMPO, clampTempo, lineSettingsOf, measureAt, totalBeats } from '../../audio/perform';
 import { INSTRUMENTS } from '../../audio/synth';
 import { renderWav, saveFile, slug, wavName } from '../../audio/wav';
+import { track } from '../../stats';
 import { lineColor } from './colors';
 import './PlayerPanel.css';
 
@@ -155,6 +156,7 @@ function Panel({ project }: { project: Project }) {
       const name = `${slug(project.title)}.music-reader.json`;
       const r = await saveFile(new Blob([serializeProject(project)], { type: 'application/json' }), name);
       setStatus(r === 'cancelled' ? '' : `Projet exporté : ${name}`);
+      if (r !== 'cancelled') track('projet_exporte', { format: 'json' });
     } catch (e) {
       setStatus(`Échec de l’export du projet : ${(e as Error).message}`);
     }
@@ -167,6 +169,7 @@ function Panel({ project }: { project: Project }) {
       const name = wavName(project);
       const r = await saveFile(blob, name);
       setStatus(r === 'cancelled' ? '' : `Audio exporté : ${name} (${(blob.size / 1e6).toFixed(1)} Mo)`);
+      if (r !== 'cancelled') track('projet_exporte', { format: 'wav' });
     } catch (e) {
       setStatus(`Échec de l’export audio : ${(e as Error).message}`);
     } finally {
