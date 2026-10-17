@@ -91,7 +91,9 @@ describe('findIssues', () => {
     const p = proj(2000, notes, notes.map(x => ({ ...x })), notes.map(x => ({ ...x })));
     const t = performance.now();
     expect(findIssues(p)).toEqual([]);
-    expect(performance.now() - t).toBeLessThan(200);
+    // marge large : les machines d'intégration continue (Mac Intel) sont lentes ; un algorithme quadratique
+    // prendrait ici plusieurs secondes
+    expect(performance.now() - t).toBeLessThan(1000);
   });
 });
 
