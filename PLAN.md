@@ -194,7 +194,14 @@ Toutes ces étapes sont faites : la **version 1.0.0** est publiée, suivie de la
   - les paquets d'Audiveris contiennent une copie inutilisée de ses classes Java (2 471 fichiers) : retirée, après vérification que les résultats restent identiques à l'octet près.
 - **Version 1.0.0 publiée** sur la page [Releases](https://github.com/Ghomerr/music-reader/releases) (7 octobre 2026). L'intégration continue ([desktop.yml](.github/workflows/desktop.yml)) construit chaque cible sur son propre système et **teste une vraie analyse depuis l'application packagée** ; les quatre cibles passent. Le Mac a d'abord échoué : l'image disque d'Audiveris affiche un contrat de licence à accepter, qui bloquait sans personne devant ; elle est convertie au préalable, comme le fait Homebrew.
 - **Version 1.1.0 publiée** (17 octobre 2026) : statistiques d'usage anonymes (lancements, analyses, projets chargés et exportés) pour savoir si et comment le logiciel est utilisé, détail dans [v1/README.md](v1/README.md#application-de-bureau-windows-mac-linux). Un test de durée (« rapide sur une grande partition ») a dû être assoupli : la machine Mac Intel de l'intégration continue dépassait les 200 ms prévus.
-- **Reste à vérifier à la main** : le premier lancement sur un vrai Mac (avertissement de macOS pour une application non signée par un éditeur reconnu) et sous Linux ; le son, contrôlé par des tests et une lecture dans Edge, pas à l'oreille sur plusieurs systèmes.
+- **Version 1.2.0** (31 octobre 2026), détail dans [CHANGELOG.md](CHANGELOG.md) :
+  - **partition vierge** : on peut écrire une partition sans image (formation, métrique, armure, nombre de mesures), et **insérer ou supprimer des mesures**. Chaque mesure part d'un silence de mesure, sans quoi une partition neuve serait couverte de « mesure vide ». Limite : la réanalyse d'une page reconstruit ses mesures d'après l'image, une mesure ajoutée ou supprimée dans une page analysée n'y survit pas ;
+  - **exemple** « Au clair de la lune », avec une mesure volontairement fausse, pour essayer sans partition ;
+  - **didacticiel** : une visite guidée par écran, comme dans Dungeon Escape et Malefic Realms, sans mascotte. **Décision** : pas de démarrage automatique, puisque l'application ne garde rien d'un lancement à l'autre et qu'une visite automatique reviendrait à chaque fois ; une invitation à l'accueil et le bouton 🎓 suffisent ;
+  - **mise à jour automatique** pour les versions installées (installateur Windows, AppImage), annonce et lien de téléchargement pour la version portable et le Mac (signature Apple requise pour mieux faire), bandeau avec lien vers le changelog. Vérifiée de bout en bout sous Windows (une 1.2.0 installée passe en 1.2.1 depuis un faux GitHub local). Le désinstalleur efface aussi le cache d'electron-updater (≈ 190 Mo), qui restait sinon ;
+  - **changelog** du projet, dont chaque section devient les notes de la version GitHub correspondante ; numéro de version dans l'en-tête ;
+  - corrigé en route : le serveur ré-encodait en JSON les fichiers `.json` qu'il sert (l'exemple ne s'ouvrait pas dans l'application de bureau).
+- **Reste à vérifier à la main** : le premier lancement sur un vrai Mac (avertissement de macOS pour une application non signée par un éditeur reconnu) et sous Linux ; la mise à jour réelle de l'AppImage ; le son, contrôlé par des tests et une lecture dans Edge, pas à l'oreille sur plusieurs systèmes.
 
 ## 7. Hors V1 (pistes V2)
 
@@ -206,7 +213,8 @@ Toutes ces étapes sont faites : la **version 1.0.0** est publiée, suivie de la
 - Corriger une barre de mesure manquée ou en trop (aujourd'hui : relancer la page avec une autre police).
 - Corriger Audiveris lui-même, si les erreurs se révèlent trop fréquentes — voir « Fiabiliser la reconnaissance ».
 - Signer l'application (certificat Windows, compte développeur Apple à 99 $/an) pour supprimer l'avertissement du premier lancement.
-- Mise à jour automatique de l'application de bureau (aujourd'hui : retélécharger la nouvelle version).
+- Mise à jour automatique sur Mac et pour la version portable Windows (aujourd'hui : bandeau et lien de téléchargement).
+- Ajouter ou retirer une ligne (instrument) dans une partition existante, et changer de métrique ou d'armure en cours de partition depuis l'éditeur.
 - Linux sur processeur ARM : Audiveris n'y est pas distribué, il faudrait le compiler.
 
 **Avancé en V1** (voir [v1/README.md](v1/README.md)) : la correction manuelle des notes et des paroles, la

@@ -6,9 +6,16 @@ réimprime une partition propre. Voir [PLAN.md](../PLAN.md) pour le cadrage.
 
 ## Parcours
 
-1. **Importer** — une image par page (PNG/JPG, glisser-déposer, sélecteur ou appareil photo), à réordonner.
-   Avertissement si une image semble contenir deux pages. Ou **ouvrir un projet `.json`** : on arrive
-   directement à la relecture, réglages et corrections compris.
+1. **Importer** — trois façons de commencer :
+   - **des images**, une par page (PNG/JPG, glisser-déposer, sélecteur ou appareil photo), à réordonner.
+     Avertissement si une image semble contenir deux pages. Ou **ouvrir un projet `.json`** : on arrive
+     directement à la relecture, réglages et corrections compris ;
+   - **une partition vierge** (depuis la 1.2.0), pour écrire soi-même : titre, formation (chant, piano, chant et
+     piano, instrument en clé de sol ou de fa), métrique, armure, nombre de mesures. Chaque mesure part d'un
+     silence de mesure (pas de mesure « vide » signalée) ; l'éditeur s'ouvre sur la mesure 1, en mode Ajouter ;
+   - **l'exemple**, « Au clair de la lune » avec ses paroles et une mesure volontairement fausse (mesure 4 du
+     chant : une blanche au lieu d'une ronde), pour essayer la relecture sans partition sous la main. Il est généré
+     par `src/ui/import/demo-score.ts` (`$env:UPDATE_DEMO='1'; npx vitest run demo` pour le refaire).
 2. **Analyser** — Audiveris page par page, avec agrandissement automatique si la résolution est trop faible.
    - **Choix automatique de la police** sur la première page (voir plus bas), proposée ensuite pour les autres
      pages : on la valide, ou on en choisit une autre et on relance toutes les pages. Police et agrandissement
@@ -68,6 +75,11 @@ Trois **modes** exclusifs disent ce que fait un clic sur la portée, pour qu'il 
 - Raccourcis : 1–6 pour les figures, « . » pour le point, flèches, Suppr, Échap. **Ctrl+Z / Ctrl+Y** annulent et
   rétablissent les corrections (pas les réglages d'écoute).
 - L'extrait d'origine, les diagnostics et la palette restent en place ; seules les portées défilent.
+- **Insérer et supprimer des mesures** (« + avant », « + après », « Supprimer la mesure », depuis la 1.2.0) : une
+  mesure insérée reprend la métrique et l'armure de sa voisine et part d'un silence de mesure ; une suppression
+  demande confirmation si la mesure contient des notes. Annulable. Une **réanalyse** d'une page reconstruit ses
+  mesures d'après l'image : une mesure ajoutée dans une page analysée y disparaît, une mesure supprimée y revient
+  (une partition vierge n'a pas de page, elle n'est pas concernée). Logique : `src/model/measures.ts`.
 
 **Lignes affichées.** Une ligne décochée dans le panneau d'écoute n'est plus jouée, ni affichée sur la partition,
 dans l'éditeur ou dans la liste à relire (qui indique combien de points elle masque). Elle n'allonge plus non
@@ -79,6 +91,22 @@ lignes imprimées.
 Les diagnostics sont recalculés à chaque correction : une mesure réparée perd sa couleur aussitôt. Une note
 posée ou modifiée à la main est marquée comme telle (en indigo) et **survit à une réanalyse** de sa page, de même
 qu'une syllabe corrigée.
+
+## Didacticiel
+
+Le bouton **🎓 Didacticiel** de l'en-tête lance la visite guidée de l'écran affiché : Importer, Analyser, Relire et
+écouter, l'éditeur de mesure (s'il est ouvert), Imprimer. Chaque étape met un élément en lumière (le reste de l'écran
+est assombri) et l'explique dans une bulle ; Échap quitte, ← → changent d'étape. Même principe que les tutoriels de
+Dungeon Escape et Malefic Realms, sans mascotte.
+
+- La visite de l'écran Importer se termine sur « Ouvrir l'exemple », qui enchaîne sur celle de « Relire et écouter »,
+  puis celle-ci sur l'éditeur, ouvert sur la mesure fautive de l'exemple.
+- **Pas de démarrage automatique** : l'application de bureau ne garde rien d'un lancement à l'autre, une visite
+  automatique reviendrait donc à chaque fois. L'écran Importer propose une « Visite guidée » ; ailleurs, une pastille
+  discrète sur le bouton 🎓 la suggère à la première arrivée sur l'écran dans la session.
+- Une étape dont l'élément est absent est sautée (pas d'extrait d'origine pour un projet rechargé, pas de « Ramener à
+  4/4 » si la mesure ne déborde pas…). La visite Analyser exige une vraie analyse : l'exemple n'a pas de pages.
+- Code : `src/ui/tutorial/` (`tours.tsx` pour les textes, `place.ts` pour le placement de la bulle, testé).
 
 ## Choix automatique de la police
 
@@ -169,6 +197,23 @@ Rien n'est envoyé en développement, pendant les tests ni par la version web, s
 - Mac : clic droit sur l'application › *Ouvrir*, puis *Ouvrir* (ou Réglages Système › Confidentialité et
   sécurité › *Ouvrir quand même*). L'application est signée « ad hoc », ce qui évite le message « endommagée ».
 
+**Mises à jour** (depuis la 1.2.0) : au lancement, l'application demande à GitHub la dernière version publiée ; si
+elle est plus récente, un bandeau l'annonce, avec un lien vers le [changelog](../CHANGELOG.md). Ensuite :
+- **version installée** (installateur Windows, AppImage Linux) : « Mettre à jour » télécharge la nouvelle version
+  (electron-updater, qui lit les fichiers `latest.yml` / `latest-linux.yml` publiés avec chaque version), puis
+  « Redémarrer et installer » la met en place et relance l'application. Exporter son projet avant : l'application ne
+  garde rien d'une session à l'autre ;
+- **version portable** (archive Windows) et **Mac** : « Télécharger » ouvre la page de la version. L'archive n'a pas
+  d'installateur capable de la remplacer, et sur Mac la mise à jour automatique exige une signature Apple payante.
+Hors ligne, la vérification échoue en silence. `LECTONOTE_NO_UPDATE=1` la désactive. Logique : `desktop/update.mjs`
+(et le pont `desktop/preload.cjs` vers le bandeau `src/ui/update/`).
+
+Vérifié sous Windows de bout en bout : une 1.2.0 installée découvre une 1.2.1 publiée par un faux GitHub local
+(`LECTONOTE_UPDATE_API`, `LECTONOTE_UPDATE_FEED`), la télécharge, redémarre, et c'est la 1.2.1 qui est installée.
+La version installée garde son installateur courant dans `%LOCALAPPDATA%\music-reader-updater` (≈ 190 Mo) pour
+accélérer les mises à jour suivantes ; la désinstallation l'efface (`desktop/build/installer.nsh`). L'AppImage n'a
+pas été essayée en mise à jour réelle.
+
 **Construction.** Chaque système se construit sur lui-même, car Audiveris s'extrait de son paquet officiel avec
 les outils du système (`msiexec`, `hdiutil`, `dpkg-deb`) :
 
@@ -185,9 +230,11 @@ l'application packagée** ; sur Mac, la signature est vérifiée aussi. Chaque p
 et teste (paquets dans les *artifacts* du run) ; un tag `v…` publie en plus une version GitHub avec tous les
 téléchargements. Les quatre cibles passent depuis la 1.0.0.
 
-**Publier une version** : mettre à jour `version` dans `package.json`, commiter, puis poser et pousser le tag
-(`git tag -a v1.1.0 -m "…"` puis `git push origin main v1.1.0`). Ne pas créer la version à la main sur GitHub :
-la publication la crée elle-même et échouerait si elle existait déjà.
+**Publier une version** : mettre à jour `version` dans `package.json`, ajouter sa section au
+[CHANGELOG.md](../CHANGELOG.md) (« `## 1.3.0 — date` » : elle devient les notes de la version GitHub, et la
+publication échoue si elle manque), commiter, puis poser et pousser le tag (`git tag -a v1.3.0 -m "…"` puis
+`git push origin main v1.3.0`). Ne pas créer la version à la main sur GitHub : la publication la crée elle-même et
+échouerait si elle existait déjà. Les applications installées la proposeront d'elles-mêmes à leur lancement suivant.
 
 Particularités rencontrées par système :
 - **Mac** : l'image disque d'Audiveris porte un contrat de licence à accepter, qui bloque sans personne devant ;
@@ -238,7 +285,8 @@ une offre d'au moins 1 Go — d'où le choix de l'application de bureau pour dis
 ## Organisation du code
 
 ```
-desktop/           application de bureau (Electron) : processus principal, préparation du moteur, test packagé
+desktop/           application de bureau (Electron) : processus principal, mises à jour (update.mjs, preload.cjs),
+                   préparation du moteur, test packagé
 server/            serveur Node sans dépendance : file d'analyse Audiveris, journal, géométrie (.omr)
 src/model/         modèle interne et tout ce qui en dérive, sans interface
   types.ts           le modèle : notes en (mesure, position dans la mesure, durée), en noires
@@ -248,10 +296,13 @@ src/model/         modèle interne et tout ce qui en dérive, sans interface
   musicxml-write.ts  projet → MusicXML (affichage, impression), transposition orthographiée
   project-io.ts      fichier projet v2 (et lecture des fichiers v1 de la maquette et de la v0)
   pitch.ts           hauteurs, armures, transposition
+  blank.ts           partition vierge (formations, silences de mesure)
+  measures.ts        insérer / supprimer une mesure
 src/analysis/      envoi au serveur, agrandissement, extrait et choix de la police
 src/audio/         synthèse, lecteur, export WAV
 src/state/store.ts état de l'application, historique des corrections
-src/ui/            les quatre étapes ; common/OsmdView affiche un MusicXML avec une couche cliquable
+src/ui/            les quatre étapes ; common/OsmdView affiche un MusicXML avec une couche cliquable ;
+                   tutorial/ le didacticiel, update/ le bandeau de mise à jour, import/demo-score.ts l'exemple
 public/            manifeste, service worker et icônes de la PWA
 ```
 
