@@ -5,8 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { updateSettings, useStore } from '../../state/store';
 import { timeline } from '../../model/check';
 import { serializeProject } from '../../model/project-io';
+import { isAddedMeasure, measureOrigin } from '../../model/measures';
 import { keyLabel, transposeKey } from '../../model/pitch';
-import type { Clef, Line, LineSettings, Project, Settings } from '../../model/types';
+import type { Clef, Line, LineSettings, Measure, Project, Settings } from '../../model/types';
 import * as player from '../../audio/player';
 import { DEFAULT_TEMPO, MAX_TEMPO, MIN_TEMPO, clampTempo, lineSettingsOf, measureAt, totalBeats } from '../../audio/perform';
 import { INSTRUMENTS } from '../../audio/synth';
@@ -56,6 +57,13 @@ function transposeText(t: number): string {
   return `${amount} plus ${t > 0 ? 'haut' : 'bas'}`;
 }
 
+/** « Page 2 · mesure 5 » sur une partition analysée ; « Mesure 12 » s'il n'y a pas d'original. */
+function positionLabel(p: Project, m: Measure, i: number): string {
+  const origin = measureOrigin(p, m);
+  if (!origin) return `Mesure ${i + 1}`;
+  return isAddedMeasure(m) ? `Mesure ${i + 1} · ajoutée` : `Page ${m.page} · mesure ${m.label}`;
+}
+
 const signed = (t: number) => (t > 0 ? `+${t}` : t < 0 ? `−${-t}` : '0');
 
 function Panel({ project }: { project: Project }) {
@@ -84,10 +92,10 @@ function Panel({ project }: { project: Project }) {
   const spb = 60 / clampTempo(settings.tempo);
   const paint = useCallback((b: number) => {
     if (fillRef.current) fillRef.current.style.width = total ? `${Math.min(100, (b / total) * 100)}%` : '0';
-    const m = project.measures[measureAt(times, b)];
-    if (posRef.current) posRef.current.textContent = m ? `Page ${m.page} · mesure ${m.label}` : '';
+    const i = measureAt(times, b), m = project.measures[i];
+    if (posRef.current) posRef.current.textContent = m ? positionLabel(project, m, i) : '';
     if (timeRef.current) timeRef.current.textContent = `${fmt(b * spb)} / ${fmt(total * spb)}`;
-  }, [times, total, spb, project.measures]);
+  }, [times, total, spb, project.measures, project.pages]);
   useEffect(() => {
     let raf = 0;
     const loop = () => {

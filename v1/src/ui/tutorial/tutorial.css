@@ -1,0 +1,40 @@
+/* ---------- Visite guidée ---------- */
+:root{--tuto-dim:rgba(17,17,24,.58)}
+@media (prefers-color-scheme: dark){ :root{--tuto-dim:rgba(0,0,0,.7)} }
+
+/* au-dessus de tout, tiroir de l'éditeur compris ; capte les clics : on ne modifie rien pendant la visite */
+.tuto{position:fixed;inset:0;z-index:1000}
+.tuto-spot{position:fixed;border-radius:10px;pointer-events:none;
+  box-shadow:0 0 0 9999px var(--tuto-dim),0 0 0 3px var(--accent),0 0 18px 4px color-mix(in srgb,var(--accent) 45%,transparent);
+  transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease}
+.tuto-spot.tuto-instant{transition:none}
+.tuto.tuto-dim::before{content:'';position:fixed;inset:0;background:var(--tuto-dim)}
+.tuto.tuto-dim .tuto-spot{display:none}
+
+.tuto-bubble{position:fixed;width:min(420px,calc(100vw - 16px));background:var(--surface);color:var(--ink);
+  border:1px solid var(--accent);border-radius:14px;padding:14px 16px 12px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.tuto-bubble[data-place=center]{top:50%;left:50%;transform:translate(-50%,-50%)}
+/* écran étroit : pleine largeur, du côté opposé à la cible */
+.tuto-bubble[data-place^=dock]{left:0;right:0;width:auto;border-radius:0;border-width:1px 0;max-height:50vh;overflow:auto}
+.tuto-bubble[data-place=dock-bottom]{bottom:0;top:auto!important;border-radius:14px 14px 0 0}
+.tuto-bubble[data-place=dock-top]{top:0;border-radius:0 0 14px 14px}
+.tuto-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.tuto-title{flex:1;margin:0;font-size:16px;color:var(--accent)}
+.tuto-progress{color:var(--muted);font-size:12px;font-weight:600;white-space:nowrap}
+.tuto-text{font-size:14px;line-height:1.5;max-height:40vh;overflow-y:auto}
+.tuto-text p{margin:0 0 6px}
+.tuto-bubble .note{margin:6px 0 0}
+.tuto-actions{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+
+/* suggestion discrète sur le bouton « Didacticiel » (première arrivée sur un écran) */
+[data-tour="help"]{position:relative}
+.tuto-hint{position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 2px var(--bg);pointer-events:none}
+.tuto-hint::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--accent);animation:tuto-ping 1.8s ease-out 3}
+@keyframes tuto-ping{to{transform:scale(2.6);opacity:0}}
+
+@media (prefers-reduced-motion: reduce){
+  .tuto-spot{transition:none}
+  .tuto-hint::after{animation:none}
+}
+@media print{ .tuto,.tuto-hint{display:none!important} }

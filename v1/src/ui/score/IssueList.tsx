@@ -1,6 +1,7 @@
 // Panneau « À relire » : les diagnostics du modèle, groupés par mesure. C'est la porte d'entrée de la
 // correction : chaque ligne ouvre l'éditeur sur la mesure signalée.
 import { useMemo } from 'react';
+import { measureOrigin } from '../../model/measures';
 import type { Issue, IssueKind, Project } from '../../model/types';
 import { setState } from '../../state/store';
 
@@ -75,11 +76,12 @@ export function IssueList({ project, issues, selected, hidden = 0 }: Props) {
           <ul className="issue-groups">
             {groups.map(([m, list]) => {
               const meta = project.measures[m];
+              const origin = meta && measureOrigin(project, meta);
               return (
                 <li key={m} className={m === selected ? 'cur' : ''}>
                   <button className="issue-measure" onClick={() => open(m, list.find(i => !i.checked)?.lineId ?? list[0].lineId)}>
                     <b>Mesure {m + 1}</b>
-                    {meta && <small> · page {meta.page}, mesure {meta.label}</small>}
+                    {origin && <small> · {origin}</small>}
                   </button>
                   {list.map((i, k) => (
                     <button key={k} className={'issue ' + kindClass(i)} onClick={() => open(m, i.lineId)}>

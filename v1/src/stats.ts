@@ -1,7 +1,8 @@
 // Statistiques d'usage anonymes : le serveur local les relaie à PostHog quand c'est activé (application de
 // bureau packagée), sinon il les ignore. Jamais bloquant, jamais de nom de fichier ni de contenu de partition.
 
-export type StatsEvent = 'partition_analysee' | 'projet_charge' | 'projet_exporte';
+export type StatsEvent = 'partition_analysee' | 'projet_charge' | 'projet_exporte'
+  | 'partition_vierge' | 'exemple_ouvert' | 'tutoriel' | 'mise_a_jour';
 
 export function track(event: StatsEvent, properties: Record<string, string | number | boolean> = {}): void {
   try {

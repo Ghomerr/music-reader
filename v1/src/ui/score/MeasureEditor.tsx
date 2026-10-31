@@ -3,6 +3,7 @@
 // ScoreStep sur le nouveau projet, montrent la mesure se « réparer » à vue.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Issue, NoteEvent, Project } from '../../model/types';
+import { deleteMeasure, hasNotes, insertMeasure, isAddedMeasure, measureOrigin } from '../../model/measures';
 import { EPS, durationName, keyLabel, pitchLabel } from '../../model/pitch';
 import { editProject, getState, newId, setState } from '../../state/store';
 import { playMeasure } from '../../audio/player';
@@ -52,8 +53,13 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
   const measure = project.measures[m];
   const [fig, setFig] = useState<Figure>({ base: 1, dots: 0, triplet: false });
   const [rest, setRest] = useState(false);
-  /** ce que fait un clic sur la portée : sélectionner (défaut, ne pose jamais rien), ajouter, gommer */
-  const [mode, setMode] = useState<EditMode>('select');
+  /**
+   * Ce que fait un clic sur la portée : sélectionner (défaut, ne pose jamais rien), ajouter, gommer. Une mesure
+   * qui n'a encore que des silences (partition vierge, mesure ajoutée) s'ouvre en mode Ajouter : il n'y a rien
+   * à sélectionner, on vient pour écrire.
+   */
+  const [mode, setMode] = useState<EditMode>(() =>
+    project.lines.every(l => l.notes.every(n => n.measure !== selection.measure || !n.pitch)) ? 'add' : 'select');
   const [insert, setInsert] = useState(false);
   const [shift, setShift] = useState(true);
   const [voice, setVoice] = useState(1);
@@ -212,6 +218,20 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
     if (to >= 0 && to < project.measures.length) setState({ selection: { measure: to, lineId: activeLine } });
   };
   const close = () => setState({ selection: null });
+  /** Insère une mesure vide (silence de mesure sur chaque ligne) à l'indice `at`, et l'ouvre. */
+  const addMeasure = (at: number) => {
+    let to = at;
+    editProject(d => { to = insertMeasure(d, at); });
+    setState({ selection: { measure: to, lineId: activeLine } });
+  };
+  /** Supprime la mesure ouverte sur toutes les lignes ; l'éditeur passe à la suivante (ou à la précédente). */
+  const removeMeasure = () => {
+    if (project.measures.length <= 1) return;
+    if (hasNotes(project, m) && !window.confirm(`Supprimer la mesure ${m + 1} et toutes ses notes, sur toutes les lignes ? (Ctrl+Z pour annuler)`)) return;
+    editProject(d => { deleteMeasure(d, m); });
+    setState({ selection: { measure: Math.min(m, project.measures.length - 2), lineId: activeLine } });
+  };
+  const origin = measureOrigin(project, measure);
 
   // ---------- Clavier (la barre d'espace reste au panneau d'écoute) ----------
   keyRef.current =(e: KeyboardEvent) => {
@@ -261,11 +281,17 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
       <header className="me-head">
         <div className="me-nav">
           <button className="btn sm" onClick={() => goto(m - 1)} disabled={m === 0} title="Mesure précédente (PgPréc)">←</button>
-          <h3>Mesure {m + 1} <small>— page {measure.page}, mesure {measure.label} de l'original</small></h3>
+          <h3>Mesure {m + 1}{origin && <small> — {isAddedMeasure(measure) ? origin : `${origin} de l'original`}</small>}</h3>
           <button className="btn sm" onClick={() => goto(m + 1)} disabled={m >= project.measures.length - 1} title="Mesure suivante (PgSuiv)">→</button>
         </div>
         <span className="badge">{measure.beats}/{measure.beatType}</span>
         <span className="badge">{keyLabel(measure.fifths, measure.mode)}</span>
+        <span className="me-ops" role="group" aria-label="Insérer ou supprimer une mesure" data-tour="measure-ops">
+          <button className="btn sm" onClick={() => addMeasure(m)} title="Insérer une mesure vide avant celle-ci (Ctrl+Z pour annuler)">+ avant</button>
+          <button className="btn sm" onClick={() => addMeasure(m + 1)} title="Insérer une mesure vide après celle-ci (Ctrl+Z pour annuler)">+ après</button>
+          <button className="btn sm danger" onClick={removeMeasure} disabled={project.measures.length <= 1}
+                  title="Supprimer cette mesure et son contenu sur toutes les lignes (Ctrl+Z pour annuler)">Supprimer la mesure</button>
+        </span>
         <span className="spacer" />
         <button className="btn sm" onClick={() => playMeasure(m)} title="Écouter la mesure, toutes lignes actives">▶ Écouter la mesure</button>
         <button className="btn sm" onClick={close} title="Fermer (Échap)" aria-label="Fermer l'éditeur">✕</button>

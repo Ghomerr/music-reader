@@ -14,9 +14,20 @@ files:
   - dist/**
   - server/**
   - desktop/main.mjs
+  - desktop/update.mjs
+  - desktop/version.mjs
+  - desktop/preload.cjs
   - desktop/build/icon.png
   - package.json
   - "!**/*.map"
+
+# Mises à jour : electron-updater lit les fichiers latest*.yml publiés avec chaque version GitHub (desktop.yml les
+# envoie avec les paquets). Seuls l'installateur Windows et l'AppImage s'en servent (cf. desktop/update.mjs).
+publish:
+  provider: github
+  owner: Ghomerr
+  repo: music-reader
+  releaseType: release
 
 # Moteur de reconnaissance de la plateforme visée : Audiveris (Java compris) et modèles OCR, hors de l'archive asar
 # pour pouvoir être exécuté.

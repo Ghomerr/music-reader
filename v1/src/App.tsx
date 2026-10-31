@@ -4,6 +4,8 @@ import { ImportStep } from './ui/import/ImportStep';
 import { AnalyseStep } from './ui/analyse/AnalyseStep';
 import { ScoreStep } from './ui/score/ScoreStep';
 import { PrintStep } from './ui/print/PrintStep';
+import { TourHost, startTour } from './ui/tutorial';
+import { UpdateBanner } from './ui/update/UpdateBanner';
 
 const STEPS: { id: StepId; label: string }[] = [
   { id: 'import', label: 'Importer' },
@@ -48,7 +50,7 @@ export function App() {
       <header className="app-header">
         <div className="app-bar">
           <div className="brand">
-            🎼 Lect'O'Note Matic 3000 <span className="badge">v1</span>
+            🎼 Lect'O'Note Matic 3000 <span className="badge" title="Version de l'application">v{__APP_VERSION__}</span>
             <a className="twitter" href="https://twitter.com/Ghomerr" target="_blank" rel="noopener noreferrer"
                title="@Ghomerr sur Twitter" aria-label="@Ghomerr sur Twitter">
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -71,9 +73,13 @@ export function App() {
               <button className="btn sm" onClick={redo} disabled={!canRedo()} title="Rétablir (Ctrl+Y)">↷ Rétablir</button>
             </span>
           )}
+          <button className="btn sm" data-tour="help" onClick={() => startTour()}
+                  title="Visite guidée de l'écran affiché">🎓 Didacticiel</button>
           <span className={'badge ' + (server.ok && server.audiveris ? 'ok' : server.ok ? 'err' : 'warn')}>{server.message}</span>
         </div>
       </header>
+      <UpdateBanner />
+      <TourHost />
       <main className="app-main">
         {step === 'import' && <ImportStep />}
         {step === 'analyse' && <AnalyseStep />}

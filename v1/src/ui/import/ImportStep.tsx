@@ -1,10 +1,15 @@
 // Étape 1 : choix des pages (une image = une page de partition), options d'analyse, ou ouverture
-// d'un projet déjà enregistré.
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+// d'un projet déjà enregistré. Deux autres départs, sans image : une partition vierge à écrire soi-même,
+// ou le projet d'exemple.
+import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
+import { createBlankProject, FORMATIONS, MAX_BLANK_MEASURES, type Formation } from '../../model/blank';
+import { keyLabel } from '../../model/pitch';
 import { parseProject } from '../../model/project-io';
-import { resetHistory, setProject, setState, useStore, type PageState } from '../../state/store';
+import { getState, resetHistory, setProject, setState, useStore, type PageState } from '../../state/store';
 import { addFiles, analysePending, clearPages, FONT_LABELS, isBusy, isSpread, movePage, removePage } from '../../analysis/run';
 import { track } from '../../stats';
+import { startTour } from '../tutorial';
+import { openDemo } from './demo';
 import './ImportStep.css';
 
 const SPREAD_HINT = "Audiveris attend une page de partition par image. Un scan de deux pages en vis-à-vis produit des "
@@ -27,6 +32,116 @@ export function StatusBadge({ p }: { p: PageState }) {
     case 'done': return <span className="badge ok">terminé</span>;
     case 'error': return <span className="badge err">échec</span>;
   }
+}
+
+const METERS: [number, number][] = [[2, 4], [3, 4], [4, 4], [6, 8], [3, 8], [2, 2]];
+
+/** Armures dans l'ordre des altérations : Do, puis les dièses, puis les bémols (majeur, puis mineur). */
+const KEYS = (['major', 'minor'] as const).flatMap(mode => [0, 1, 2, 3, 4, 5, 6, 7, -1, -2, -3, -4, -5, -6, -7].map(f => ({
+  value: `${f}|${mode}`, mode,
+  label: `${keyLabel(f, mode)}${f ? ` (${Math.abs(f)} ${f > 0 ? '♯' : '♭'})` : ''}`,
+})));
+
+/** Un projet en cours (analysé, corrigé) serait remplacé : on demande avant de le fermer. */
+const confirmReplace = () => !getState().project
+  || window.confirm('Le projet en cours sera fermé. Pour le garder, exportez-le d\'abord (« Projet (.json) » dans « Relire et écouter »). Continuer ?');
+
+/** « Nouvelle partition vierge » : replié par défaut, pour ne pas encombrer l'écran. */
+function BlankScore() {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [formation, setFormation] = useState<Formation>('chant-piano');
+  const [meter, setMeter] = useState('4/4');
+  const [key, setKey] = useState('0|major');
+  const [count, setCount] = useState(8);
+
+  const create = (e: FormEvent) => {
+    e.preventDefault();
+    if (!confirmReplace()) return;
+    const [beats, beatType] = meter.split('/').map(Number);
+    const [f, mode] = key.split('|');
+    const project = createBlankProject({
+      title, beats, beatType, fifths: Number(f), mode: mode === 'minor' ? 'minor' : 'major', measures: count, formation,
+    });
+    clearPages();
+    resetHistory();
+    setProject(project, []);
+    // l'éditeur s'ouvre sur la première mesure : on peut écrire tout de suite
+    setState({ pages: [], step: 'score', selection: { measure: 0, lineId: project.lines[0].id } });
+    track('partition_vierge', { formation, metrique: meter, mesures: project.measures.length });
+  };
+
+  return (
+    <div className={'import-way' + (open ? ' open' : '')} data-tour="blank-score">
+      <h3>Nouvelle partition vierge</h3>
+      <small>Écrire soi-même une partition, mesure par mesure, sans image de départ.</small>
+      {!open ? (
+        <button className="btn" onClick={() => setOpen(true)} aria-expanded={false}>✎ Créer une partition…</button>
+      ) : (
+        <form className="import-blank" onSubmit={create}>
+          <label>Titre
+            <input type="text" value={title} placeholder="Nouvelle partition" maxLength={120} onChange={e => setTitle(e.target.value)} />
+          </label>
+          <label>Formation
+            <select value={formation} onChange={e => setFormation(e.target.value as Formation)}>
+              {FORMATIONS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </label>
+          <label>Métrique
+            <select value={meter} onChange={e => setMeter(e.target.value)}>
+              {METERS.map(([b, t]) => <option key={`${b}/${t}`} value={`${b}/${t}`}>{b}/{t}</option>)}
+            </select>
+          </label>
+          <label>Tonalité
+            <select value={key} onChange={e => setKey(e.target.value)}>
+              <optgroup label="Majeur">{KEYS.filter(k => k.mode === 'major').map(k => <option key={k.value} value={k.value}>{k.label}</option>)}</optgroup>
+              <optgroup label="Mineur">{KEYS.filter(k => k.mode === 'minor').map(k => <option key={k.value} value={k.value}>{k.label}</option>)}</optgroup>
+            </select>
+          </label>
+          <label>Mesures
+            <input type="number" min={1} max={MAX_BLANK_MEASURES} value={count}
+                   onChange={e => setCount(Math.max(1, Math.min(MAX_BLANK_MEASURES, Math.round(+e.target.value) || 1)))} />
+          </label>
+          <div className="row import-blank-go">
+            <button type="button" className="btn" onClick={() => setOpen(false)}>Annuler</button>
+            <button type="submit" className="btn primary">Créer et écrire →</button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/** Les départs sans image : partition vierge, exemple, visite guidée. */
+function OtherStarts() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const demo = async () => {
+    if (!confirmReplace()) return;
+    setBusy(true);
+    setError('');
+    try { await openDemo(); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="card import-ways" aria-label="Autres façons de commencer">
+      <BlankScore />
+      <div className="import-way">
+        <h3>Essayer avec un exemple</h3>
+        <small>« Au clair de la lune », chant et piano, avec une mesure à corriger.</small>
+        <button className="btn" data-tour="demo" onClick={demo} disabled={busy}>
+          {busy ? <span className="spin" /> : '♪'} Ouvrir l'exemple
+        </button>
+        {error && <div className="note err">{error}</div>}
+      </div>
+      <div className="import-way">
+        <h3>Première visite ?</h3>
+        <small>Une visite guidée présente chaque écran, pas à pas.</small>
+        <button className="btn" data-tour="tour-invite" onClick={() => startTour('import')}>🎓 Visite guidée</button>
+      </div>
+    </section>
+  );
 }
 
 export function ImportStep() {
@@ -85,6 +200,8 @@ export function ImportStep() {
 
   return (
     <>
+      <OtherStarts />
+
       <section className="card">
         <h2>Pages à analyser</h2>
         <small>

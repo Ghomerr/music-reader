@@ -10,3 +10,16 @@
 .import-actions{gap:4px}
 .import-opt{display:flex;gap:10px;align-items:flex-start}
 .import-opt input{margin-top:4px}
+
+/* Départs sans image : partition vierge, exemple, visite guidée (trois tuiles compactes) */
+.import-ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;padding:14px}
+.import-way{display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0}
+.import-way h3{margin:0}
+.import-way > .btn{margin-top:auto}
+.import-way .note{margin:0}
+/* le formulaire déplié prend toute la largeur ; les deux autres tuiles passent dessous */
+.import-way.open{grid-column:1 / -1}
+.import-blank{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px 12px;width:100%;margin-top:4px}
+.import-blank label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted)}
+.import-blank label > *{color:var(--ink);min-width:0}
+.import-blank-go{grid-column:1 / -1;justify-content:flex-end}

@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { setupUpdates } from './update.mjs';
 
 const TITLE = "Lect'O'Note Matic 3000";
 const APP_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -111,7 +112,8 @@ function createWindow(origin) {
     width: 1400, height: 900, minWidth: 820, minHeight: 560,
     title: TITLE, backgroundColor: '#f6f5f2', show: false, autoHideMenuBar: true,
     icon: process.platform === 'linux' ? path.join(APP_ROOT, 'desktop', 'build', 'icon.png') : undefined,
-    webPreferences: { contextIsolation: true, sandbox: true },
+    // preload : le seul pont avec la page (bandeau de mise à jour), cf. preload.cjs
+    webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(APP_ROOT, 'desktop', 'preload.cjs') },
   });
   win.once('ready-to-show', () => win.show());
   // garder le nom de l'application, pas le <title> de la page
@@ -189,8 +191,9 @@ app.whenReady().then(async () => {
     return;
   }
   setMenu();
-  createWindow(`http://127.0.0.1:${server.port}`);
+  const win = createWindow(`http://127.0.0.1:${server.port}`);
   server.track('app_lancee');
+  setupUpdates(win, { enabled: app.isPackaged, onEvent: etape => server.track('mise_a_jour', { etape }) });
 });
 
 // Une seule fenêtre : la fermer quitte l'application, Mac compris (sinon le serveur tournerait pour rien).

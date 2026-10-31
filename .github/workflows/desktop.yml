@@ -72,14 +72,20 @@ jobs:
       - name: Test de l'application packagée (vraie analyse)
         run: npm run desktop:smoke:packaged
 
+      # Avec les paquets, les fichiers de mise à jour lus par electron-updater : latest.yml (+ .blockmap) pour
+      # l'installateur Windows, latest-linux.yml pour l'AppImage. Pas latest-mac.yml : le Mac ne se met pas à jour
+      # seul (signature Apple requise), et les deux Mac en produiraient chacun un du même nom.
       - uses: actions/upload-artifact@v4
         with:
           name: LectONote-${{ runner.os }}-${{ matrix.arch }}
           path: |
             v1/release/*.zip
             v1/release/*.exe
+            v1/release/*.exe.blockmap
             v1/release/*.dmg
             v1/release/*.AppImage
+            v1/release/latest.yml
+            v1/release/latest-linux.yml
           if-no-files-found: error
 
   release:
@@ -90,10 +96,19 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: paquets
           merge-multiple: true
+      # Notes de version : la section du CHANGELOG pour cette version (« ## 1.2.0 — … »), suivie du rappel commun.
+      - name: Notes de version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## / { on = index($0, "## " v " ") == 1 || $0 == "## " v; next } on' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "Section « ## $version » absente du CHANGELOG.md" >&2; exit 1; fi
+          printf '\n---\n\n%s\n' "Application de bureau, sans installation : décompresser puis double-cliquer (Windows : archive portable ou installateur ; Mac : image disque, Apple Silicon ou Intel ; Linux : AppImage). Au premier lancement, Windows et macOS demandent une confirmation (application non signée par un éditeur reconnu), voir le README. Les versions installées (installateur Windows, AppImage) se mettent ensuite à jour d'elles-mêmes." >> notes.md
+          cat notes.md
       - name: Version GitHub
         env:
           GH_TOKEN: ${{ github.token }}
@@ -102,4 +117,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" paquets/* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Lect'O'Note Matic 3000 ${GITHUB_REF_NAME}" \
-            --notes "Application de bureau, sans installation : décompresser puis double-cliquer (Windows : archive portable ou installateur ; Mac : image disque, Apple Silicon ou Intel ; Linux : AppImage). Au premier lancement, Windows et macOS demandent une confirmation (application non signée par un éditeur reconnu), voir le README."
+            --notes-file notes.md

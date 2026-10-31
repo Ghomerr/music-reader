@@ -115,3 +115,6 @@
   .me-original canvas{max-height:200px}
 }
 @media print{ .me-drawer{display:none} }
+
+/* insérer / supprimer une mesure : un petit groupe à part dans l'en-tête de l'éditeur */
+.me-ops{display:inline-flex;gap:4px;align-items:center;padding-left:8px;margin-left:2px;border-left:1px solid var(--line)}

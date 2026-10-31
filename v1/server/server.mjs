@@ -15,7 +15,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = +(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const JOBS_DIR = process.env.JOBS_DIR || path.join(ROOT, 'jobs');
-const DIST_DIR = process.env.DIST_DIR || path.join(ROOT, 'dist');
+// path.resolve : un chemin donné avec des « / » sous Windows doit se comparer aux chemins normalisés (serveStatic)
+const DIST_DIR = path.resolve(process.env.DIST_DIR || path.join(ROOT, 'dist'));
 // Outils locaux : ceux de la v1 d'abord, sinon ceux déjà téléchargés pour la v0 (rien à refaire).
 const TOOL_DIRS = [path.join(ROOT, 'tools'), path.join(ROOT, '..', 'v0', 'tools')];
 const TESSDATA = process.env.TESSDATA_PREFIX
@@ -189,7 +190,8 @@ function cleanup() {
 // ---------- Statistiques d'usage ----------
 // Un identifiant tiré au hasard à chaque démarrage (rien n'est gardé d'une session à l'autre), pas de GeoIP :
 // le fuseau horaire suffit à situer grossièrement. Jamais de nom de fichier ni de contenu de partition.
-const STATS_EVENTS = new Set(['app_lancee', 'partition_analysee', 'projet_charge', 'projet_exporte']);
+const STATS_EVENTS = new Set(['app_lancee', 'partition_analysee', 'projet_charge', 'projet_exporte',
+  'partition_vierge', 'exemple_ouvert', 'tutoriel', 'mise_a_jour']);
 const STATS_SESSION = crypto.randomUUID();
 const STATS_BASE = {
   $process_person_profile: false,
@@ -236,7 +238,8 @@ const MIME = {
 
 const send = (res, code, body, type = 'application/json', cache = 'no-store') => {
   res.writeHead(code, { 'Content-Type': type, 'Cache-Control': cache });
-  res.end(type === 'application/json' ? JSON.stringify(body) : body);
+  // un objet est sérialisé ; un fichier .json lu sur le disque (Buffer) part tel quel
+  res.end(type === 'application/json' && !Buffer.isBuffer(body) ? JSON.stringify(body) : body);
 };
 
 function sendFile(res, file, cache = 'no-store') {
