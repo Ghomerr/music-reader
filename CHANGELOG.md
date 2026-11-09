@@ -3,6 +3,16 @@
 Les versions se téléchargent sur la page [Releases](https://github.com/Ghomerr/music-reader/releases).
 Chaque section ci-dessous sert aussi de notes de version sur GitHub.
 
+## 1.3.0 — 2026-11-09
+
+- **Copier une mesure** sur une ou plusieurs autres mesures, depuis l'éditeur de mesure (« ⧉ Copier vers… ») :
+  pratique pour un accompagnement ou un refrain qui se répète. On saisit les mesures cibles (« 5 », « 5, 7-9 »,
+  ou les raccourcis « la suivante » et « jusqu'à la fin ») et on choisit les lignes à copier. Le contenu des
+  mesures cibles est remplacé, en une seule correction annulable (Ctrl+Z).
+- Les paroles des mesures cibles sont gardées (chaque syllabe reste sur la note de même position), sauf si l'on
+  coche « copier aussi les paroles ».
+- Le didacticiel de l'éditeur présente la copie.
+
 ## 1.2.0 — 2026-10-31
 
 - **Partition vierge** : commencer sans image, en choisissant la formation (chant, piano, chant et piano,
