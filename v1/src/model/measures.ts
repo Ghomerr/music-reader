@@ -1,4 +1,4 @@
-// Insertion et suppression de mesures. Ces fonctions modifient un brouillon de projet : on les appelle
+// Insertion, suppression et copie de mesures. Ces fonctions modifient un brouillon de projet : on les appelle
 // dans editProject, ce qui les rend annulables. Tout ce qui désigne une mesure par son indice (notes,
 // changements de clé, symboles perdus, mesures validées) est recalé.
 //
@@ -6,7 +6,7 @@
 // Une réanalyse reconstruit les mesures d'une page d'après l'image : une mesure ajoutée dans une page
 // analysée disparaît alors, et une mesure supprimée revient.
 import { measureRest } from './blank';
-import type { Clef, Measure, Project } from './types';
+import type { Clef, Measure, NoteEvent, Project } from './types';
 
 export const ADDED_PREFIX = 'ajout-';
 export const isAddedMeasure = (m: Pick<Measure, 'pageKey'>): boolean => m.pageKey.startsWith(ADDED_PREFIX);
@@ -86,6 +86,83 @@ export function deleteMeasure(p: Project, at: number): boolean {
   p.measures.splice(at, 1);
   for (const l of p.lines) if (l.clefChanges && !l.clefChanges.length) delete l.clefChanges;
   return true;
+}
+
+export interface CopyOptions {
+  /** lignes à copier ; absent ou vide = toutes */
+  lineIds?: string[];
+  /** copier aussi les paroles de la mesure source ; sinon les mesures cibles gardent les leurs */
+  lyrics?: boolean;
+}
+
+let copySeq = 0;
+const copyId = () => `copie-${Date.now().toString(36)}${(++copySeq).toString(36)}`;
+
+/**
+ * Copie le contenu de la mesure `from` sur chacune des mesures `targets` (indices), ligne par ligne : le
+ * contenu des cibles est remplacé. Pratique pour un motif d'accompagnement ou un refrain qui se répète.
+ * - Les notes copiées sont marquées `manual` : comme une correction à la main, elles survivent à une
+ *   réanalyse de leur page.
+ * - Paroles : par défaut, chaque cible garde les siennes, reportées sur la note copiée de même voix et de
+ *   même position (un couplet suivant sur la même mélodie) ; avec `lyrics`, celles de la source sont copiées.
+ * - Une cible n'est plus « validée » : son contenu a changé, le contrôle des durées la juge à nouveau (une
+ *   cible d'une autre métrique peut ainsi être signalée).
+ * La mesure source elle-même et les indices hors partition sont ignorés. Rend le nombre de mesures remplacées.
+ */
+export function copyMeasure(p: Project, from: number, targets: number[], o: CopyOptions = {}): number {
+  const n = p.measures.length;
+  if (!Number.isInteger(from) || from < 0 || from >= n) return 0;
+  const dest = [...new Set(targets)].filter(t => Number.isInteger(t) && t >= 0 && t < n && t !== from);
+  if (!dest.length) return 0;
+  const lineIds = new Set(o.lineIds?.length ? o.lineIds : p.lines.map(l => l.id));
+  const destSet = new Set(dest);
+  for (const l of p.lines) {
+    if (!lineIds.has(l.id)) continue;
+    const source = l.notes.filter(x => x.measure === from);
+    const old = new Map<number, NoteEvent[]>();
+    for (const x of l.notes) {
+      if (!destSet.has(x.measure)) continue;
+      const list = old.get(x.measure);
+      if (list) list.push(x); else old.set(x.measure, [x]);
+    }
+    const copies = dest.flatMap((t): NoteEvent[] => {
+      // ligne vide dans la source : la cible reçoit un silence de mesure plutôt que rien (pas de « mesure vide »)
+      if (!source.length) return [{ ...measureRest(p.measures[t], t, l.id), id: copyId(), manual: true }];
+      const before = old.get(t) ?? [];
+      return source.map(x => {
+        const { lyrics: srcLyrics, ...rest } = x;
+        const keep = o.lyrics ? srcLyrics
+          : x.pitch ? before.find(b => b.pitch && b.voice === x.voice && Math.abs(b.offset - x.offset) < 1e-6)?.lyrics : undefined;
+        return { ...rest, id: copyId(), measure: t, manual: true, ...(keep?.length ? { lyrics: keep.map(y => ({ ...y })) } : {}) };
+      });
+    });
+    l.notes = [...l.notes.filter(x => !destSet.has(x.measure)), ...copies]
+      .sort((a, b) => a.measure - b.measure || a.offset - b.offset || a.voice - b.voice);
+  }
+  p.review.checked = p.review.checked.filter(k => {
+    const cut = k.indexOf('|');
+    return !(destSet.has(Number(k.slice(0, cut))) && lineIds.has(k.slice(cut + 1)));
+  });
+  return dest.length;
+}
+
+/**
+ * Lit une liste de mesures saisie à la main, numérotées comme à l'écran (à partir de 1) : « 5 », « 5, 7-9 »,
+ * « 3 à 6 ». Rend les indices (à partir de 0) triés et sans doublon, ou un message d'erreur en clair.
+ */
+export function parseMeasureList(text: string, count: number): { indices: number[]; error?: string } {
+  const out = new Set<number>();
+  const tokens = text.replace(/\s*(?:à|-|–|\.\.)\s*/g, '-').split(/[\s,;]+/).filter(Boolean);
+  if (!tokens.length) return { indices: [], error: 'Indiquez au moins une mesure (ex. « 5 » ou « 5, 7-9 »).' };
+  for (const t of tokens) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(t);
+    if (!m) return { indices: [], error: `« ${t} » n'est pas un numéro de mesure.` };
+    const a = +m[1], b = m[2] ? +m[2] : a;
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    if (lo < 1 || hi > count) return { indices: [], error: `« ${t} » : la partition va de la mesure 1 à la mesure ${count}.` };
+    for (let i = lo; i <= hi; i++) out.add(i - 1);
+  }
+  return { indices: [...out].sort((x, y) => x - y) };
 }
 
 /** La mesure contient-elle au moins une note (pas seulement des silences) sur une ligne ? */

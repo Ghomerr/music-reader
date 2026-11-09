@@ -6,16 +6,16 @@ l'écoute au tempo et dans la tonalité de son choix, puis on réimprime une par
 
 ## Télécharger
 
-**Version 1.2.0** — page [Releases](https://github.com/Ghomerr/music-reader/releases) ; nouveautés dans le
+**Version 1.3.0** — page [Releases](https://github.com/Ghomerr/music-reader/releases) ; nouveautés dans le
 [CHANGELOG](CHANGELOG.md). Application de bureau, **sans installation** et utilisable sans connexion :
 
 | Système | Fichier | Taille |
 |---|---|---|
-| Windows | `LectONote-1.2.0-windows-portable.zip` : décompresser, puis double-clic sur *Lect'O'Note Matic 3000.exe* | ≈ 240 Mo |
-| Windows | `LectONote-1.2.0-windows-installation.exe` : installateur classique, qui se met à jour seul | ≈ 185 Mo |
-| Mac Apple Silicon (M1, M2…) | `LectONote-1.2.0-mac-arm64.dmg` (ou `.zip`) | ≈ 220 Mo |
-| Mac Intel | `LectONote-1.2.0-mac-x64.dmg` (ou `.zip`) | ≈ 225 Mo |
-| Linux | `LectONote-1.2.0-linux-x86_64.AppImage` : le rendre exécutable, puis le lancer ; se met à jour seule | ≈ 230 Mo |
+| Windows | `LectONote-1.3.0-windows-portable.zip` : décompresser, puis double-clic sur *Lect'O'Note Matic 3000.exe* | ≈ 240 Mo |
+| Windows | `LectONote-1.3.0-windows-installation.exe` : installateur classique, qui se met à jour seul | ≈ 185 Mo |
+| Mac Apple Silicon (M1, M2…) | `LectONote-1.3.0-mac-arm64.dmg` (ou `.zip`) | ≈ 220 Mo |
+| Mac Intel | `LectONote-1.3.0-mac-x64.dmg` (ou `.zip`) | ≈ 225 Mo |
+| Linux | `LectONote-1.3.0-linux-x86_64.AppImage` : le rendre exécutable, puis le lancer ; se met à jour seule | ≈ 230 Mo |
 
 Au **premier lancement**, l'application n'étant pas signée par un éditeur reconnu :
 - Windows : « Windows a protégé votre ordinateur » › *Informations complémentaires* › *Exécuter quand même* ;
@@ -43,7 +43,7 @@ lancer l'application avec la variable d'environnement `LECTONOTE_NO_STATS=1`.
 - **Analyser** : reconnaissance page par page, choix automatique de la police de référence d'Audiveris sur la
   première page, et contrôle de chaque mesure — celles dont les durées ne tombent pas juste sont signalées.
 - **Corriger** une mesure à côté de l'extrait de l'image d'origine : poser, déplacer, changer de figure ou de voix,
-  supprimer des notes ; insérer ou supprimer des mesures ; corriger les paroles couplet par couplet. Tout s'annule
+  supprimer des notes ; insérer, supprimer ou copier des mesures (un refrain, un accompagnement qui revient) ; corriger les paroles couplet par couplet. Tout s'annule
   (Ctrl+Z).
 - **Écouter** : choix des lignes (chant, piano…), instrument et volume, tempo, transposition ; export audio WAV.
 - **Imprimer** : partition propre au format A4 (ou PDF), lignes et couplets au choix, dans la tonalité choisie.

@@ -80,6 +80,15 @@ Trois **modes** exclusifs disent ce que fait un clic sur la portée, pour qu'il 
   demande confirmation si la mesure contient des notes. Annulable. Une **réanalyse** d'une page reconstruit ses
   mesures d'après l'image : une mesure ajoutée dans une page analysée y disparaît, une mesure supprimée y revient
   (une partition vierge n'a pas de page, elle n'est pas concernée). Logique : `src/model/measures.ts`.
+- **Copier une mesure** (« ⧉ Copier vers… », depuis la 1.3.0) sur une ou plusieurs autres : un accompagnement ou un
+  refrain qui revient se corrige une fois. Mesures cibles saisies comme à l'écran (« 5 », « 5, 7-9 », « 3 à 6 »), ou
+  « la suivante », « jusqu'à la fin » ; cases à cocher pour les lignes copiées (toutes les lignes affichées par
+  défaut). Le contenu des cibles est **remplacé**, ligne par ligne ; l'aperçu prévient quand une cible contient déjà
+  des notes. Les **paroles** des cibles sont gardées, reportées sur la note copiée de même voix et de même position
+  (un couplet suivant sur la même mélodie), sauf avec « copier aussi les paroles ». Les notes copiées comptent comme
+  des corrections à la main (elles survivent à une réanalyse), et une cible n'est plus « vérifiée » : le contrôle des
+  durées la juge à nouveau. Une seule correction, donc un seul Ctrl+Z. Logique : `copyMeasure` et
+  `parseMeasureList` dans `src/model/measures.ts` ; panneau : `src/ui/score/CopyPanel.tsx`.
 
 **Lignes affichées.** Une ligne décochée dans le panneau d'écoute n'est plus jouée, ni affichée sur la partition,
 dans l'éditeur ou dans la liste à relire (qui indique combien de points elle masque). Elle n'allonge plus non

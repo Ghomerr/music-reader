@@ -191,7 +191,7 @@ function cleanup() {
 // Un identifiant tiré au hasard à chaque démarrage (rien n'est gardé d'une session à l'autre), pas de GeoIP :
 // le fuseau horaire suffit à situer grossièrement. Jamais de nom de fichier ni de contenu de partition.
 const STATS_EVENTS = new Set(['app_lancee', 'partition_analysee', 'projet_charge', 'projet_exporte',
-  'partition_vierge', 'exemple_ouvert', 'tutoriel', 'mise_a_jour']);
+  'partition_vierge', 'exemple_ouvert', 'tutoriel', 'mise_a_jour', 'mesure_copiee']);
 const STATS_SESSION = crypto.randomUUID();
 const STATS_BASE = {
   $process_person_profile: false,

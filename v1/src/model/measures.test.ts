@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { createBlankProject } from './blank';
 import { findIssues } from './check';
-import { deleteMeasure, hasNotes, insertMeasure, isAddedMeasure, measureOrigin } from './measures';
+import { copyMeasure, deleteMeasure, hasNotes, insertMeasure, isAddedMeasure, measureOrigin, parseMeasureList } from './measures';
 import { parseProject, serializeProject } from './project-io';
 import type { NoteEvent, Project } from './types';
 
@@ -117,4 +117,78 @@ test('hasNotes, measureOrigin', () => {
   const analysed = { pages: [{ key: 'vierge', name: 'p.png', font: 'Leland', scale: 1 }] };
   expect(measureOrigin(analysed, p.measures[2])).toBe('page 1, mesure 2');
   expect(measureOrigin(analysed, p.measures[1])).toBe('ajoutée');
+});
+
+describe('copyMeasure', () => {
+  const E4 = { step: 'E' as const, alter: 0, octave: 4 };
+  /** chant : deux notes avec paroles en mesure 0 ; mesures 1 et 2 : une note avec sa propre parole */
+  function song(): Project {
+    const p = sample();
+    const chant = p.lines[0];
+    chant.notes = [
+      { id: 'a', measure: 0, offset: 0, duration: 2, pitch: C5, voice: 1, lyrics: [{ verse: 1, text: 'Au', syllabic: 'single' }] },
+      { id: 'b', measure: 0, offset: 2, duration: 1, pitch: E4, voice: 1, tie: true, lyrics: [{ verse: 1, text: 'clair', syllabic: 'single' }] },
+      { id: 'c', measure: 1, offset: 0, duration: 3, pitch: E4, voice: 1, lyrics: [{ verse: 1, text: 'mon', syllabic: 'single' }] },
+      { id: 'd', measure: 2, offset: 0, duration: 3, pitch: E4, voice: 1 },
+      { id: 'e', measure: 3, offset: 0, duration: 3, pitch: C5, voice: 1 },
+    ];
+    p.review.checked = ['1|0|1', '2|1|1'];
+    return p;
+  }
+  const chantOf = (p: Project, m: number) => p.lines[0].notes.filter(n => n.measure === m);
+
+  test('remplace le contenu des cibles, garde leurs paroles par position, marque les notes corrigées', () => {
+    const p = song();
+    expect(copyMeasure(p, 0, [1, 2, 0, 1], { lineIds: ['0|1'] })).toBe(2);
+    for (const m of [1, 2]) {
+      const ns = chantOf(p, m);
+      expect(ns.map(n => [n.offset, n.duration, n.pitch?.step, n.manual, n.tie])).toEqual([[0, 2, 'C', true, undefined], [2, 1, 'E', true, true]]);
+    }
+    // paroles : la mesure 1 garde « mon » sur la note du 1er temps ; la mesure 2 n'en avait pas
+    expect(chantOf(p, 1).map(n => n.lyrics?.[0]?.text)).toEqual(['mon', undefined]);
+    expect(chantOf(p, 2).every(n => !n.lyrics)).toBe(true);
+    // source et mesure 3 intactes ; autres lignes intactes ; identifiants uniques
+    expect(chantOf(p, 0).map(n => n.id)).toEqual(['a', 'b']);
+    expect(chantOf(p, 3).map(n => n.id)).toEqual(['e']);
+    expect(measuresOf(p, '1|1')).toEqual([0, 1, 2, 3]);
+    const ids = p.lines.flatMap(l => l.notes.map(n => n.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    // la validation des cibles copiées tombe, pas celle des autres lignes
+    expect(p.review.checked).toEqual(['2|1|1']);
+    // projet valide, notes triées
+    const again = parseProject(serializeProject(p));
+    expect(again.lines[0].notes.map(n => n.measure)).toEqual([0, 0, 1, 1, 2, 2, 3]);
+  });
+
+  test('avec les paroles de la source, et sur toutes les lignes par défaut', () => {
+    const p = song();
+    copyMeasure(p, 0, [3], { lyrics: true });
+    expect(chantOf(p, 3).map(n => n.lyrics?.[0]?.text)).toEqual(['Au', 'clair']);
+    // piano : la mesure 3 reprend le silence de mesure de la mesure 0
+    expect(p.lines[1].notes.filter(n => n.measure === 3)).toMatchObject([{ pitch: null, duration: 3, manual: true }]);
+    expect(findIssues(p).filter(i => !i.checked && i.measure === 3 && i.kind !== 'lost')).toEqual([]);
+  });
+
+  test('rien à faire : source seule, hors partition', () => {
+    const p = song();
+    const before = serializeProject(p);
+    expect(copyMeasure(p, 0, [0, 7, -1, 1.5])).toBe(0);
+    expect(copyMeasure(p, 9, [1])).toBe(0);
+    expect(serializeProject(p)).toBe(before);
+  });
+});
+
+describe('parseMeasureList', () => {
+  test('numéros, plages, séparateurs variés', () => {
+    expect(parseMeasureList('5', 8)).toEqual({ indices: [4] });
+    expect(parseMeasureList(' 5, 7-8 ; 2 ', 8)).toEqual({ indices: [1, 4, 6, 7] });
+    expect(parseMeasureList('3 à 5 4', 8)).toEqual({ indices: [2, 3, 4] });
+    expect(parseMeasureList('6–4', 8)).toEqual({ indices: [3, 4, 5] });
+  });
+  test('erreurs en clair', () => {
+    expect(parseMeasureList('', 8).error).toMatch(/au moins une mesure/);
+    expect(parseMeasureList('5, x', 8).error).toBe('« x » n\'est pas un numéro de mesure.');
+    expect(parseMeasureList('7-9', 8).error).toBe('« 7-9 » : la partition va de la mesure 1 à la mesure 8.');
+    expect(parseMeasureList('0', 8).error).toMatch(/va de la mesure 1/);
+  });
 });

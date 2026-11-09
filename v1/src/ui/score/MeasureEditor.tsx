@@ -16,6 +16,7 @@ import {
 import { FigureIcon } from './Glyphs';
 import { KIND_LABEL, kindClass } from './IssueList';
 import { OriginalExcerpt } from './OriginalExcerpt';
+import { CopyPanel } from './CopyPanel';
 import { StaffEditor, type EditMode, type Tool } from './StaffEditor';
 
 interface Props {
@@ -65,6 +66,8 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
   const [voice, setVoice] = useState(1);
   /** une rangée vide pour saisir un couplet de plus */
   const [addingVerse, setAddingVerse] = useState(false);
+  /** panneau « Copier vers… » ouvert */
+  const [copying, setCopying] = useState(false);
   const [sel, setSel] = useState<{ lineId: string; id: string } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -286,11 +289,14 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
         </div>
         <span className="badge">{measure.beats}/{measure.beatType}</span>
         <span className="badge">{keyLabel(measure.fifths, measure.mode)}</span>
-        <span className="me-ops" role="group" aria-label="Insérer ou supprimer une mesure" data-tour="measure-ops">
+        <span className="me-ops" role="group" aria-label="Insérer, supprimer ou copier une mesure" data-tour="measure-ops">
           <button className="btn sm" onClick={() => addMeasure(m)} title="Insérer une mesure vide avant celle-ci (Ctrl+Z pour annuler)">+ avant</button>
           <button className="btn sm" onClick={() => addMeasure(m + 1)} title="Insérer une mesure vide après celle-ci (Ctrl+Z pour annuler)">+ après</button>
           <button className="btn sm danger" onClick={removeMeasure} disabled={project.measures.length <= 1}
                   title="Supprimer cette mesure et son contenu sur toutes les lignes (Ctrl+Z pour annuler)">Supprimer la mesure</button>
+          <button className={'btn sm' + (copying ? ' sel' : '')} data-tour="measure-copy" aria-pressed={copying}
+                  onClick={() => setCopying(c => !c)} disabled={project.measures.length <= 1}
+                  title="Copier le contenu de cette mesure sur une ou plusieurs autres mesures">⧉ Copier vers…</button>
         </span>
         <span className="spacer" />
         <button className="btn sm" onClick={() => playMeasure(m)} title="Écouter la mesure, toutes lignes actives">▶ Écouter la mesure</button>
@@ -298,6 +304,9 @@ export function MeasureEditor({ project, issues, selection, visibleLines }: Prop
       </header>
 
       <div className="me-body" ref={bodyRef}>
+        {copying && (
+          <CopyPanel project={project} from={m} lines={project.lines.filter(l => shown(l.id))} onClose={() => setCopying(false)} />
+        )}
         {/* Original, diagnostics et outils restent en place ; seules les portées défilent (.me-lines). */}
         <div className="me-top">
           <OriginalExcerpt measure={measure} />

@@ -118,3 +118,11 @@
 
 /* insérer / supprimer une mesure : un petit groupe à part dans l'en-tête de l'éditeur */
 .me-ops{display:inline-flex;gap:4px;align-items:center;padding-left:8px;margin-left:2px;border-left:1px solid var(--line)}
+
+/* copier la mesure vers d'autres mesures : panneau au-dessus de l'original */
+.me-copy{display:flex;flex-direction:column;gap:6px;padding:8px 10px;margin-bottom:8px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft)}
+.me-copy-row{flex-wrap:wrap;gap:6px 10px;align-items:center}
+.me-copy-row input[type=text]{width:12em}
+.me-copy-row label{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.me-copy .note{margin:0}
+.me-copy-warn{color:var(--warn)}

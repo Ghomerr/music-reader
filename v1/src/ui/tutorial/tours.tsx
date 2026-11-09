@@ -317,6 +317,16 @@ const EDITOR: TourStep[] = [
     body: <p>Ajoute une mesure vide à côté de celle-ci, ou la supprime. Comme toute correction : <b>Ctrl+Z</b> pour annuler.</p>,
   },
   {
+    target: '[data-tour="measure-copy"]',
+    title: 'Copier une mesure',
+    body: (
+      <>
+        <p>Un motif qui revient (accompagnement, refrain) ? Corrigez-le une fois, puis copiez cette mesure sur d'autres : <i>« 5 »</i>, <i>« 5, 7-9 »</i> ou <i>« jusqu'à la fin »</i>.</p>
+        <p>Choisissez les lignes à copier. Les mesures cibles gardent leurs propres paroles, sauf si vous cochez « copier aussi les paroles ».</p>
+      </>
+    ),
+  },
+  {
     title: 'Bonne relecture',
     body: <p>Toutes les corrections s'annulent (<b>Ctrl+Z</b>) et survivent à une réanalyse de la page. Raccourcis :
       S, A, G, 1–6, ↑ ↓, Suppr, Échap.</p>,
